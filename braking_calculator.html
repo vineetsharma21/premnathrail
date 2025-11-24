@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Braking Performance Calculator</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:20px}
+    .card{border:1px solid #ddd;padding:18px;border-radius:8px;max-width:900px}
+    .row{display:flex;gap:10px;margin-bottom:10px}
+    label{width:160px}
+    input[type=text], input[type=number]{flex:1;padding:6px}
+    button{padding:8px 12px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{border:1px solid #eee;padding:8px;text-align:center}
+  </style>
+</head>
+<body>
+  <h2>Braking Performance Calculator</h2>
+  <div class="card">
+    <div class="row">
+      <label>Vehicle mass (kg)</label>
+      <input id="mass" type="number" step="any" value="10000" />
+    </div>
+    <div class="row">
+      <label>Speed (km/h)</label>
+      <input id="speed" type="number" step="any" value="50" />
+    </div>
+    <div class="row">
+      <label>Coefficient of friction (mu)</label>
+      <input id="mu" type="number" step="any" value="0.3" />
+    </div>
+    <div class="row">
+      <label>Reaction time (s)</label>
+      <input id="reaction" type="number" step="any" value="1.0" />
+    </div>
+    <div class="row">
+      <label>Gradient</label>
+      <input id="gradient" type="number" step="any" value="0" />
+      <select id="gradient_type">
+        <option value="percent">% (percent)</option>
+        <option value="1in">1 in N</option>
+        <option value="degree">Degree</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Number of wheels</label>
+      <input id="wheels" type="number" value="4" />
+    </div>
+    <div style="margin-top:8px">
+      <button id="calc">Calculate</button>
+      <button id="pdf" style="margin-left:8px">Download PDF</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    document.getElementById('calc').addEventListener('click', async function(){
+      const payload = {
+        mass_kg: parseFloat(document.getElementById('mass').value),
+        speed_kmh: parseFloat(document.getElementById('speed').value),
+        mu: parseFloat(document.getElementById('mu').value),
+        reaction_time: parseFloat(document.getElementById('reaction').value),
+        gradient: parseFloat(document.getElementById('gradient').value),
+        gradient_type: document.getElementById('gradient_type').value,
+        num_wheels: parseInt(document.getElementById('wheels').value,10)
+      };
+
+      const resEl = document.getElementById('result');
+      resEl.innerHTML = 'Calculating...';
+
+      try{
+        const resp = await fetch('/braking_calculate', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if(!resp.ok) throw new Error(await resp.text());
+        const data = await resp.json();
+        // show table
+        resEl.innerHTML = `<h3>Result</h3>`;
+        const d = data.result;
+        let html = `<table><thead><tr><th>Speed (km/h)</th><th>Speed (m/s)</th><th>Reaction (m)</th><th>Braking Dist (m)</th><th>Total Stop Dist (m)</th><th>Decel (m/s²)</th><th>Braking Force (N)</th></tr></thead>`;
+        html += `<tbody><tr><td>${d.speed_kmh}</td><td>${d.speed_ms}</td><td>${d.reaction_distance_m}</td><td>${d.braking_distance_m}</td><td>${d.total_stopping_distance_m}</td><td>${d.deceleration_m_s2}</td><td>${d.braking_force_N}</td></tr></tbody></table>`;
+        resEl.innerHTML += html;
+      }catch(err){
+        resEl.innerHTML = `<pre style="color:red">${err}</pre>`;
+      }
+    })
+
+    document.getElementById('pdf').addEventListener('click', async function(){
+      const payload = {
+        mass_kg: parseFloat(document.getElementById('mass').value),
+        speed_kmh: parseFloat(document.getElementById('speed').value),
+        mu: parseFloat(document.getElementById('mu').value),
+        reaction_time: parseFloat(document.getElementById('reaction').value),
+        gradient: parseFloat(document.getElementById('gradient').value),
+        gradient_type: document.getElementById('gradient_type').value,
+        num_wheels: parseInt(document.getElementById('wheels').value,10)
+      };
+      const resEl = document.getElementById('result');
+      resEl.innerHTML = 'Preparing PDF...';
+      try{
+        const resp = await fetch('/download_braking_report', {
+          method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        if(!resp.ok) {
+          const txt = await resp.text(); throw new Error(txt);
+        }
+        const blob = await resp.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Braking_Report.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        resEl.innerHTML = '<b>PDF downloaded</b>';
+      }catch(err){
+        resEl.innerHTML = `<pre style="color:red">${err}</pre>`;
+      }
+    })
+  </script>
+</body>
+</html>
