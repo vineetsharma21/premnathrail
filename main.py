@@ -113,15 +113,15 @@ class VehiclePerformanceRawInput(BaseModel):
     torque_curve: Dict[str, float] = Field(default_factory=dict)
 
 class BrakingRawInput(BaseModel):
-    mass_kg: str
-    speed_kmh: str
-    mu: str
-    reaction_time: str
-    gradient: str
+    mass_kg: float
+    speed_kmh: float
+    mu: float
+    reaction_time: float
+    gradient: float
     gradient_type: str
-    num_wheels: str
-    speed_increment: Optional[str] = "10"
-    gradient_steps: Optional[str] = "5"
+    num_wheels: int
+    speed_increment: Optional[float] = 10.0
+    gradient_steps: Optional[int] = 5
 
 # ---------- Validation Functions ----------
 def _validate_input(value_str: str, type_func, name: str, is_optional=False, default=0.0, is_disabled=False):
@@ -243,15 +243,24 @@ def process_and_validate_vehicle_performance_inputs(raw: VehiclePerformanceRawIn
 def process_and_validate_braking_inputs(raw: BrakingRawInput):
     inputs = {}
     inputs_raw = raw.dict()
-    inputs['mass_kg'] = _validate_input(raw.mass_kg, float, "Mass")
-    inputs['speed_kmh'] = _validate_input(raw.speed_kmh, float, "Speed")
-    inputs['mu'] = _validate_input(raw.mu, float, "Friction Coefficient")
-    inputs['reaction_time'] = _validate_input(raw.reaction_time, float, "Reaction Time")
-    inputs['gradient'] = _validate_input(raw.gradient, float, "Gradient")
+    inputs['mass_kg'] = raw.mass_kg
+    inputs['speed_kmh'] = raw.speed_kmh
+    inputs['mu'] = raw.mu
+    inputs['reaction_time'] = raw.reaction_time
+    inputs['gradient'] = raw.gradient
     inputs['gradient_type'] = raw.gradient_type
-    inputs['num_wheels'] = _validate_input(raw.num_wheels, int, "Number of Wheels")
-    inputs['speed_increment'] = _validate_input(raw.speed_increment, float, "Speed Increment", True, 10.0)
-    inputs['gradient_steps'] = _validate_input(raw.gradient_steps, int, "Gradient Steps", True, 5)
+    inputs['num_wheels'] = raw.num_wheels
+    inputs['speed_increment'] = raw.speed_increment if raw.speed_increment else 10.0
+    inputs['gradient_steps'] = raw.gradient_steps if raw.gradient_steps else 5
+    
+    # Basic validation
+    if inputs['mass_kg'] <= 0:
+        raise ValueError("Mass must be greater than 0")
+    if inputs['num_wheels'] <= 0:
+        raise ValueError("Number of wheels must be greater than 0")
+    if inputs['mu'] <= 0:
+        raise ValueError("Friction coefficient must be greater than 0")
+    
     return inputs, inputs_raw
 
 
