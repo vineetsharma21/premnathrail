@@ -20,6 +20,9 @@ try:
 except ImportError:
     docx = None
 
+import subprocess
+import tempfile
+
 # --- Import Logic ---
 from Hydraulic_Motor_Calculation import Calculator as HydraulicCalculator
 from QmaxCalculator_Logic import QmaxCalculatorLogic, SIGMA_B_OPTIONS
@@ -28,7 +31,11 @@ from LoadDistribution_Logic import format_detailed_steps as format_load_distro_s
 from LoadDistribution_Logic import create_report_docx as create_load_distro_docx
 from Tractive_Effort_Logic import perform_te_calculations, format_te_report_text, create_te_report_docx
 from Vehicle_Performance_Logic import VehiclePerformanceCalculator
-from braking_logic import compute_braking, create_braking_pdf
+from braking_logic import (
+    calculate_braking_performance,
+    calculate_multi_speed_analysis,
+    calculate_multi_gradient_analysis
+)
 
 # --- DATABASE SETUP ---
 models.Base.metadata.create_all(bind=engine)
@@ -46,7 +53,6 @@ def verify_password(plain_password, hashed_password):
 class HydraulicRawInput(BaseModel):
     calc_mode: str
     weight: str
-from schemas import BrakingRawInput
     axles: str
     speed: str
     max_vehicle_rpm: str
@@ -106,6 +112,17 @@ class VehiclePerformanceRawInput(BaseModel):
     max_rpm: str
     torque_curve: Dict[str, float] = Field(default_factory=dict)
 
+class BrakingRawInput(BaseModel):
+    mass_kg: str
+    speed_kmh: str
+    mu: str
+    reaction_time: str
+    gradient: str
+    gradient_type: str
+    num_wheels: str
+    speed_increment: Optional[str] = "10"
+    gradient_steps: Optional[str] = "5"
+
 # ---------- Validation Functions ----------
 def _validate_input(value_str: str, type_func, name: str, is_optional=False, default=0.0, is_disabled=False):
     if is_disabled: return default
@@ -146,15 +163,15 @@ def process_and_validate_hydraulic_inputs(raw: HydraulicRawInput):
     inputs['pto_gear_ratio'] = _validate_input(raw.pto_gear_ratio, float, "PTO Ratio")
     inputs['vol_eff_motor'] = _validate_input(raw.vol_eff_motor, float, "Motor Vol Eff")
     inputs['vol_eff_pump'] = _validate_input(raw.vol_eff_pump, float, "Pump Vol Eff")
- # class BrakingRawInput(BaseModel):
- #     mass_kg: float
- #     speed_kmh: float
- #     mu: Optional[float] = 0.3
- #     reaction_time: Optional[float] = 1.0
- #     gradient: Optional[float] = 0.0
- #     gradient_type: Optional[str] = 'percent'
- #     num_wheels: Optional[int] = 4
- #     max_braking_force: Optional[float] = None
+    
+    is_cc = (mode == 'calc_cc')
+    inputs['speed'] = _validate_input(raw.speed, float, "Speed", True, 0.0, not is_cc)
+    inputs['pressure'] = _validate_input(raw.pressure, float, "Pressure", True, 0.0, not is_cc)
+    inputs['mech_eff_motor'] = _validate_input(raw.mech_eff_motor, float, "Mech Eff", True, 0.0, not is_cc)
+    inputs['motor_disp_in'] = _validate_input(raw.motor_disp_in, float, "Motor Disp", True, 0.0, is_cc)
+    inputs['max_motor_rpm'] = _validate_input(raw.max_motor_rpm, float, "Max Motor RPM", True, 3000.0, is_cc)
+    inputs['pump_disp_in'] = _validate_input(raw.pump_disp_in, float, "Pump Disp", True, 0.0, is_cc)
+    inputs['max_pump_rpm'] = _validate_input(raw.max_pump_rpm, float, "Max Pump RPM", True, 3000.0, is_cc)
     
     return inputs, inputs_raw
 
@@ -223,16 +240,19 @@ def process_and_validate_vehicle_performance_inputs(raw: VehiclePerformanceRawIn
     inputs['torque_curve'] = tc
     return inputs, inputs_raw
 
-
-class BrakingRawInput(BaseModel):
-    mass_kg: float
-    speed_kmh: float
-    mu: Optional[float] = 0.3
-    reaction_time: Optional[float] = 1.0
-    gradient: Optional[float] = 0.0
-    gradient_type: Optional[str] = 'percent'
-    num_wheels: Optional[int] = 4
-    max_braking_force: Optional[float] = None
+def process_and_validate_braking_inputs(raw: BrakingRawInput):
+    inputs = {}
+    inputs_raw = raw.dict()
+    inputs['mass_kg'] = _validate_input(raw.mass_kg, float, "Mass")
+    inputs['speed_kmh'] = _validate_input(raw.speed_kmh, float, "Speed")
+    inputs['mu'] = _validate_input(raw.mu, float, "Friction Coefficient")
+    inputs['reaction_time'] = _validate_input(raw.reaction_time, float, "Reaction Time")
+    inputs['gradient'] = _validate_input(raw.gradient, float, "Gradient")
+    inputs['gradient_type'] = raw.gradient_type
+    inputs['num_wheels'] = _validate_input(raw.num_wheels, int, "Number of Wheels")
+    inputs['speed_increment'] = _validate_input(raw.speed_increment, float, "Speed Increment", True, 10.0)
+    inputs['gradient_steps'] = _validate_input(raw.gradient_steps, int, "Gradient Steps", True, 5)
+    return inputs, inputs_raw
 
 
 # =======================================================
@@ -299,11 +319,9 @@ async def serve_tractive_effort_page():
 async def serve_vehicle_performance_page():
     return FileResponse('vehicle_performance_calculator.html')
 
-@app.get("/braking_calculator.html")
-async def serve_braking_page():
-    if os.path.exists("braking_calculator.html"):
-        return FileResponse('braking_calculator.html')
-    return {"error": "braking_calculator.html file not found on server"}
+@app.get("/braking")
+async def serve_braking_calculator_page():
+    return FileResponse('braking_calculator.html')
 
 @app.get("/Diagram.png")
 async def serve_diagram():
@@ -474,36 +492,6 @@ async def handle_perf(raw: VehiclePerformanceRawInput):
         return {"traction_snapshot": res, "tractive_effort_graph": plot["tractive_effort_plot"], "shunting_capability_graph": plot["shunting_capability_plot"], "speed_vs_slope_table": table}
     except Exception as e: raise HTTPException(500, str(e))
 
-
-@app.post("/braking_calculate")
-async def handle_braking(raw: BrakingRawInput):
-    try:
-        inp = raw.dict()
-        res = compute_braking(
-            inp['mass_kg'], inp['speed_kmh'], inp.get('mu', 0.3), inp.get('reaction_time', 1.0),
-            inp.get('gradient', 0.0), inp.get('gradient_type', 'percent'), inp.get('num_wheels', 4), inp.get('max_braking_force', None)
-        )
-        return {"result": res}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-
-@app.post("/download_braking_report")
-async def download_braking_report(raw: BrakingRawInput):
-    if not shutil:
-        # ensure shutil is available (should be)
-        import shutil
-    try:
-        inp = raw.dict()
-        res = compute_braking(
-            inp['mass_kg'], inp['speed_kmh'], inp.get('mu', 0.3), inp.get('reaction_time', 1.0),
-            inp.get('gradient', 0.0), inp.get('gradient_type', 'percent'), inp.get('num_wheels', 4), inp.get('max_braking_force', None)
-        )
-        stream = create_braking_pdf(inp, res)
-        return StreamingResponse(stream, media_type='application/pdf', headers={"Content-Disposition": "attachment; filename=Braking_Report.pdf"})
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
 @app.post("/download_performance_report")
 async def dl_perf(raw: VehiclePerformanceRawInput):
     try:
@@ -512,6 +500,261 @@ async def dl_perf(raw: VehiclePerformanceRawInput):
         stream = calc.create_report_docx()
         return StreamingResponse(stream, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers={"Content-Disposition": "attachment; filename=Performance_Report.docx"})
     except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/braking_calculate")
+async def handle_braking_calculation(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        result = calculate_braking_performance(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/braking_multi_speed")
+async def handle_braking_multi_speed(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        results = calculate_multi_speed_analysis(
+            mass_kg=inp['mass_kg'],
+            max_speed_kmh=inp['speed_kmh'],
+            speed_increment=inp['speed_increment'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/braking_multi_gradient")
+async def handle_braking_multi_gradient(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        results = calculate_multi_gradient_analysis(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            max_gradient=inp['gradient'],
+            gradient_steps=inp['gradient_steps'],
+            gradient_type=inp['gradient_type'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/download_braking_report")
+async def download_braking_report(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        result = calculate_braking_performance(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels']
+        )
+        
+        # Generate LaTeX content
+        import tempfile
+        import subprocess
+        from datetime import datetime
+        
+        # Escape special LaTeX characters
+        def escape_latex(text):
+            special_chars = {'&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
+                           '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}',
+                           '^': r'\textasciicircum{}', '\\': r'\textbackslash{}'}
+            return ''.join(special_chars.get(c, c) for c in str(text))
+        
+        # LaTeX template
+        latex_content = r'''\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textbf{Braking Performance Report}}
+\fancyhead[R]{\today}
+\fancyfoot[C]{\thepage}
+
+\titleformat{\section}{\large\bfseries\color{blue!70!black}}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\begin{document}
+
+\begin{center}
+    {\Huge \textbf{Braking Performance Report}} \\[0.5cm]
+    {\Large Based on DIN EN 15746-2:2021-05} \\[0.3cm]
+    {\large Railway Vehicle Braking Analysis} \\[1cm]
+    \rule{\textwidth}{1pt}
+\end{center}
+
+\section{Input Parameters}
+
+\subsection{Vehicle Specifications}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Vehicle Mass & ''' + f"{result['mass_kg']}" + r''' kg \\
+Number of Wheels & ''' + f"{result['num_wheels']}" + r''' \\
+Weight (W = m $\times$ g) & ''' + f"{result['weight_n']:.2f}" + r''' N \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Operating Conditions}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Speed & ''' + f"{result['speed_kmh']}" + r''' km/h (''' + f"{result['speed_ms']}" + r''' m/s) \\
+Coefficient of Friction ($\mu$) & ''' + f"{result['mu']}" + r''' \\
+Reaction Time & ''' + f"{result['reaction_time']}" + r''' s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Track Gradient}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Gradient Value & ''' + f"{result['gradient']}" + r''' (''' + escape_latex(result['gradient_type']) + r''') \\
+Gradient Angle ($\theta$) & ''' + f"{result['angle_deg']}" + r'''$^\circ$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Calculation Results}
+
+\subsection{Forces Analysis}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Gravitational Force Component ($F_g$) & ''' + f"{result['gravitational_force_n']:.2f}" + r''' N \\
+Maximum Braking Force ($F_b = \mu \times W$) & ''' + f"{result['max_braking_force_n']:.2f}" + r''' N \\
+Net Braking Force & ''' + f"{result['net_force_n']:.2f}" + r''' N \\
+Braking Force per Wheel & ''' + f"{result['braking_force_per_wheel_n']:.2f}" + r''' N \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Braking Performance}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Deceleration & ''' + f"{result['deceleration_m_s2']:.4f}" + r''' m/s$^2$ \\
+Reaction Distance ($d_r = v \times t_r$) & ''' + f"{result['reaction_distance_m']:.2f}" + r''' m \\
+Braking Distance ($d_b = \frac{v^2}{2a}$) & ''' + f"{result['braking_distance_m']}" + r''' m \\
+\textbf{Total Stopping Distance} & \textbf{''' + f"{result['total_stopping_distance_m']}" + r''' m} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Standard Compliance}
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Standard} & \textbf{Status} \\
+\midrule
+DIN EN 15746-2:2021-05 & ''' + escape_latex(result['standard_compliance']) + r''' \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Formulas Used}
+
+\begin{itemize}
+    \item \textbf{Weight:} $W = m \times g$ where $g = 9.81$ m/s$^2$
+    \item \textbf{Gravitational Force:} $F_g = W \times \sin(\theta)$
+    \item \textbf{Maximum Braking Force:} $F_b = \mu \times W$
+    \item \textbf{Net Force:} $F_{net} = F_b \pm F_g$ (depends on gradient direction)
+    \item \textbf{Deceleration:} $a = \frac{F_{net}}{m}$
+    \item \textbf{Reaction Distance:} $d_r = v \times t_r$
+    \item \textbf{Braking Distance:} $d_b = \frac{v^2}{2a}$
+    \item \textbf{Total Stopping Distance:} $d_{total} = d_r + d_b$
+\end{itemize}
+
+\vfill
+\begin{center}
+    \rule{\textwidth}{0.5pt} \\[0.2cm]
+    \textit{Generated on: \today} \\
+    \textit{Premnath Engineering Works} \\
+    \textit{Railway Engineering Division}
+\end{center}
+
+\end{document}'''
+        
+        # Create temporary directory
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tex_file = os.path.join(tmpdir, "braking_report.tex")
+            pdf_file = os.path.join(tmpdir, "braking_report.pdf")
+            
+            # Write LaTeX file
+            with open(tex_file, 'w', encoding='utf-8') as f:
+                f.write(latex_content)
+            
+            # Compile with pdflatex
+            try:
+                subprocess.run(
+                    ['pdflatex', '-interaction=nonstopmode', '-output-directory', tmpdir, tex_file],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                    check=True
+                )
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                raise HTTPException(500, f"LaTeX compilation failed. Ensure texlive is installed. Error: {str(e)}")
+            
+            # Read generated PDF
+            if not os.path.exists(pdf_file):
+                raise HTTPException(500, "PDF generation failed - output file not found")
+            
+            with open(pdf_file, 'rb') as f:
+                pdf_content = f.read()
+            
+            return StreamingResponse(
+                io.BytesIO(pdf_content),
+                media_type="application/pdf",
+                headers={"Content-Disposition": "attachment; filename=Braking_Performance_Report.pdf"}
+            )
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 if __name__ == "__main__":
     import uvicorn
