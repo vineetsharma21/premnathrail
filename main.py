@@ -577,38 +577,23 @@ async def download_braking_report(raw: BrakingRawInput):
             num_wheels=inp['num_wheels']
         )
         
-        # Generate LaTeX content
-        import tempfile
-        import subprocess
-        from datetime import datetime
-        
-        # Escape special LaTeX characters
-        def escape_latex(text):
-            special_chars = {'&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
-                           '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}',
-                           '^': r'\textasciicircum{}', '\\': r'\textbackslash{}'}
-            return ''.join(special_chars.get(c, c) for c in str(text))
-        
-        # LaTeX template
-        latex_content = r'''\documentclass[11pt,a4paper]{article}
+        # Try LaTeX first, fallback to ReportLab if pdflatex not available
+        try:
+            from datetime import datetime
+            
+            # Escape special LaTeX characters
+            def escape_latex(text):
+                special_chars = {'&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
+                               '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}',
+                               '^': r'\textasciicircum{}', '\\': r'\textbackslash{}'}
+                return ''.join(special_chars.get(c, c) for c in str(text))
+            
+            # Simplified LaTeX template (removed fancy packages that might cause issues)
+            latex_content = r'''\documentclass[11pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[margin=2cm]{geometry}
-\usepackage{graphicx}
-\usepackage{float}
 \usepackage{booktabs}
 \usepackage{amsmath}
-\usepackage{xcolor}
-\usepackage{fancyhdr}
-\usepackage{titlesec}
-
-\pagestyle{fancy}
-\fancyhf{}
-\fancyhead[L]{\textbf{Braking Performance Report}}
-\fancyhead[R]{\today}
-\fancyfoot[C]{\thepage}
-
-\titleformat{\section}{\large\bfseries\color{blue!70!black}}{\thesection}{1em}{}
-\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
 
 \begin{document}
 
@@ -619,11 +604,10 @@ async def download_braking_report(raw: BrakingRawInput):
     \rule{\textwidth}{1pt}
 \end{center}
 
-\section{Input Parameters}
+\section*{Input Parameters}
 
-\subsection{Vehicle Specifications}
-\begin{table}[H]
-\centering
+\subsection*{Vehicle Specifications}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
@@ -633,70 +617,65 @@ Number of Wheels & ''' + f"{result['num_wheels']}" + r''' \\
 Weight (W = m $\times$ g) & ''' + f"{result['weight_n']:.2f}" + r''' N \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Operating Conditions}
-\begin{table}[H]
-\centering
+\subsection*{Operating Conditions}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
 Speed & ''' + f"{result['speed_kmh']}" + r''' km/h (''' + f"{result['speed_ms']}" + r''' m/s) \\
-Coefficient of Friction ($\mu$) & ''' + f"{result['mu']}" + r''' \\
+Coefficient of Friction & ''' + f"{result['mu']}" + r''' \\
 Reaction Time & ''' + f"{result['reaction_time']}" + r''' s \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Track Gradient}
-\begin{table}[H]
-\centering
+\subsection*{Track Gradient}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
 Gradient Value & ''' + f"{result['gradient']}" + r''' (''' + escape_latex(result['gradient_type']) + r''') \\
-Gradient Angle ($\theta$) & ''' + f"{result['angle_deg']}" + r'''$^\circ$ \\
+Gradient Angle & ''' + f"{result['angle_deg']}" + r''' degrees \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\section{Calculation Results}
+\section*{Calculation Results}
 
-\subsection{Forces Analysis}
-\begin{table}[H]
-\centering
+\subsection*{Forces Analysis}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
-Gravitational Force Component ($F_g$) & ''' + f"{result['gravitational_force_n']:.2f}" + r''' N \\
-Maximum Braking Force ($F_b = \mu \times W$) & ''' + f"{result['max_braking_force_n']:.2f}" + r''' N \\
+Gravitational Force Component & ''' + f"{result['gravitational_force_n']:.2f}" + r''' N \\
+Maximum Braking Force & ''' + f"{result['max_braking_force_n']:.2f}" + r''' N \\
 Net Braking Force & ''' + f"{result['net_force_n']:.2f}" + r''' N \\
 Braking Force per Wheel & ''' + f"{result['braking_force_per_wheel_n']:.2f}" + r''' N \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Braking Performance}
-\begin{table}[H]
-\centering
+\subsection*{Braking Performance}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Parameter} & \textbf{Value} \\
 \midrule
 Deceleration & ''' + f"{result['deceleration_m_s2']:.4f}" + r''' m/s$^2$ \\
-Reaction Distance ($d_r = v \times t_r$) & ''' + f"{result['reaction_distance_m']:.2f}" + r''' m \\
-Braking Distance ($d_b = \frac{v^2}{2a}$) & ''' + f"{result['braking_distance_m']}" + r''' m \\
+Reaction Distance & ''' + f"{result['reaction_distance_m']:.2f}" + r''' m \\
+Braking Distance & ''' + f"{result['braking_distance_m']}" + r''' m \\
 \textbf{Total Stopping Distance} & \textbf{''' + f"{result['total_stopping_distance_m']}" + r''' m} \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Standard Compliance}
-\begin{table}[H]
-\centering
+\subsection*{Standard Compliance}
+\begin{center}
 \begin{tabular}{ll}
 \toprule
 \textbf{Standard} & \textbf{Status} \\
@@ -704,64 +683,162 @@ Braking Distance ($d_b = \frac{v^2}{2a}$) & ''' + f"{result['braking_distance_m'
 DIN EN 15746-2:2021-05 & ''' + escape_latex(result['standard_compliance']) + r''' \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\section{Formulas Used}
+\section*{Formulas Used}
 
 \begin{itemize}
     \item \textbf{Weight:} $W = m \times g$ where $g = 9.81$ m/s$^2$
     \item \textbf{Gravitational Force:} $F_g = W \times \sin(\theta)$
     \item \textbf{Maximum Braking Force:} $F_b = \mu \times W$
-    \item \textbf{Net Force:} $F_{net} = F_b \pm F_g$ (depends on gradient direction)
-    \item \textbf{Deceleration:} $a = \frac{F_{net}}{m}$
+    \item \textbf{Net Force:} $F_{net} = F_b \pm F_g$
+    \item \textbf{Deceleration:} $a = F_{net} / m$
     \item \textbf{Reaction Distance:} $d_r = v \times t_r$
-    \item \textbf{Braking Distance:} $d_b = \frac{v^2}{2a}$
+    \item \textbf{Braking Distance:} $d_b = v^2 / (2a)$
     \item \textbf{Total Stopping Distance:} $d_{total} = d_r + d_b$
 \end{itemize}
 
 \vfill
 \begin{center}
     \rule{\textwidth}{0.5pt} \\[0.2cm]
-    \textit{Generated on: \today} \\
-    \textit{Premnath Engineering Works} \\
-    \textit{Railway Engineering Division}
+    \textit{Premnath Engineering Works - Railway Engineering Division}
 \end{center}
 
 \end{document}'''
-        
-        # Create temporary directory
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tex_file = os.path.join(tmpdir, "braking_report.tex")
-            pdf_file = os.path.join(tmpdir, "braking_report.pdf")
             
-            # Write LaTeX file
-            with open(tex_file, 'w', encoding='utf-8') as f:
-                f.write(latex_content)
+            # Create temporary directory
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tex_file = os.path.join(tmpdir, "braking_report.tex")
+                pdf_file = os.path.join(tmpdir, "braking_report.pdf")
+                
+                # Write LaTeX file
+                with open(tex_file, 'w', encoding='utf-8') as f:
+                    f.write(latex_content)
+                
+                # Compile with pdflatex (run twice for proper formatting)
+                for _ in range(2):
+                    result_proc = subprocess.run(
+                        ['pdflatex', '-interaction=nonstopmode', '-output-directory', tmpdir, tex_file],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=30
+                    )
+                
+                # Check if PDF was created
+                if os.path.exists(pdf_file):
+                    with open(pdf_file, 'rb') as f:
+                        pdf_content = f.read()
+                    
+                    return StreamingResponse(
+                        io.BytesIO(pdf_content),
+                        media_type="application/pdf",
+                        headers={"Content-Disposition": "attachment; filename=Braking_Performance_Report.pdf"}
+                    )
+                else:
+                    raise FileNotFoundError("PDF not generated")
+                    
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            # Fallback to ReportLab if LaTeX fails
+            from reportlab.lib.pagesizes import letter, A4
+            from reportlab.lib import colors
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT
             
-            # Compile with pdflatex
-            try:
-                subprocess.run(
-                    ['pdflatex', '-interaction=nonstopmode', '-output-directory', tmpdir, tex_file],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    timeout=30,
-                    check=True
-                )
-            except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                raise HTTPException(500, f"LaTeX compilation failed. Ensure texlive is installed. Error: {str(e)}")
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+            story = []
+            styles = getSampleStyleSheet()
             
-            # Read generated PDF
-            if not os.path.exists(pdf_file):
-                raise HTTPException(500, "PDF generation failed - output file not found")
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#1e3a8a'),
+                spaceAfter=12,
+                alignment=TA_CENTER
+            )
+            story.append(Paragraph("Braking Performance Report", title_style))
+            story.append(Paragraph("Based on DIN EN 15746-2:2021-05", styles['Heading2']))
+            story.append(Spacer(1, 0.3*inch))
             
-            with open(pdf_file, 'rb') as f:
-                pdf_content = f.read()
+            # Input Parameters Section
+            story.append(Paragraph("Input Parameters", styles['Heading2']))
+            story.append(Spacer(1, 0.1*inch))
+            
+            input_data = [
+                ['Parameter', 'Value'],
+                ['Vehicle Mass', f"{result['mass_kg']} kg"],
+                ['Number of Wheels', f"{result['num_wheels']}"],
+                ['Weight (W = m × g)', f"{result['weight_n']:.2f} N"],
+                ['Speed', f"{result['speed_kmh']} km/h ({result['speed_ms']} m/s)"],
+                ['Coefficient of Friction (μ)', f"{result['mu']}"],
+                ['Reaction Time', f"{result['reaction_time']} s"],
+                ['Gradient Value', f"{result['gradient']} ({result['gradient_type']})"],
+                ['Gradient Angle (θ)', f"{result['angle_deg']}°"],
+            ]
+            
+            input_table = Table(input_data, colWidths=[3*inch, 3*inch])
+            input_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(input_table)
+            story.append(Spacer(1, 0.3*inch))
+            
+            # Results Section
+            story.append(Paragraph("Calculation Results", styles['Heading2']))
+            story.append(Spacer(1, 0.1*inch))
+            
+            results_data = [
+                ['Parameter', 'Value'],
+                ['Gravitational Force Component (Fg)', f"{result['gravitational_force_n']:.2f} N"],
+                ['Maximum Braking Force (Fb)', f"{result['max_braking_force_n']:.2f} N"],
+                ['Net Braking Force', f"{result['net_force_n']:.2f} N"],
+                ['Braking Force per Wheel', f"{result['braking_force_per_wheel_n']:.2f} N"],
+                ['Deceleration', f"{result['deceleration_m_s2']:.4f} m/s²"],
+                ['Reaction Distance', f"{result['reaction_distance_m']:.2f} m"],
+                ['Braking Distance', f"{result['braking_distance_m']} m"],
+                ['Total Stopping Distance', f"{result['total_stopping_distance_m']} m"],
+                ['Standard Compliance', result['standard_compliance']],
+            ]
+            
+            results_table = Table(results_data, colWidths=[3*inch, 3*inch])
+            results_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(results_table)
+            story.append(Spacer(1, 0.3*inch))
+            
+            # Footer
+            story.append(Spacer(1, 0.5*inch))
+            story.append(Paragraph("Premnath Engineering Works", styles['Normal']))
+            story.append(Paragraph("Railway Engineering Division", styles['Normal']))
+            
+            doc.build(story)
+            buffer.seek(0)
             
             return StreamingResponse(
-                io.BytesIO(pdf_content),
+                buffer,
                 media_type="application/pdf",
                 headers={"Content-Disposition": "attachment; filename=Braking_Performance_Report.pdf"}
             )
+            
     except Exception as e:
         raise HTTPException(500, str(e))
 
