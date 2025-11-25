@@ -34,7 +34,8 @@ from Vehicle_Performance_Logic import VehiclePerformanceCalculator
 from braking_logic import (
     calculate_braking_performance,
     calculate_multi_speed_analysis,
-    calculate_multi_gradient_analysis
+    calculate_multi_gradient_analysis,
+    prepare_template_data_for_pdf
 )
 
 # --- DATABASE SETUP ---
@@ -567,153 +568,56 @@ async def handle_braking_multi_gradient(raw: BrakingRawInput):
 async def download_braking_report(raw: BrakingRawInput):
     try:
         inp, raw_inp = process_and_validate_braking_inputs(raw)
-        result = calculate_braking_performance(
+        
+        # Prepare comprehensive template data
+        context = prepare_template_data_for_pdf(
             mass_kg=inp['mass_kg'],
             speed_kmh=inp['speed_kmh'],
             mu=inp['mu'],
             reaction_time=inp['reaction_time'],
             gradient=inp['gradient'],
             gradient_type=inp['gradient_type'],
-            num_wheels=inp['num_wheels']
+            num_wheels=inp['num_wheels'],
+            doc_no="",  # Can be added to input form later
+            made_by="",
+            checked_by="",
+            approved_by=""
         )
         
-        # Try LaTeX first, fallback to ReportLab if pdflatex not available
+        # Try LaTeX with Jinja2 template
         try:
-            from datetime import datetime
+            from jinja2 import Environment, FileSystemLoader
+            import shutil
             
-            # Escape special LaTeX characters
-            def escape_latex(text):
-                special_chars = {'&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
-                               '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}',
-                               '^': r'\textasciicircum{}', '\\': r'\textbackslash{}'}
-                return ''.join(special_chars.get(c, c) for c in str(text))
+            # Set up Jinja2 environment to load template.tex
+            env = Environment(loader=FileSystemLoader('.'))
+            template = env.get_template('template.tex')
             
-            # Simplified LaTeX template (removed fancy packages that might cause issues)
-            latex_content = r'''\documentclass[11pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[margin=2cm]{geometry}
-\usepackage{booktabs}
-\usepackage{amsmath}
-
-\begin{document}
-
-\begin{center}
-    {\Huge \textbf{Braking Performance Report}} \\[0.5cm]
-    {\Large Based on DIN EN 15746-2:2021-05} \\[0.3cm]
-    {\large Railway Vehicle Braking Analysis} \\[1cm]
-    \rule{\textwidth}{1pt}
-\end{center}
-
-\section*{Input Parameters}
-
-\subsection*{Vehicle Specifications}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\
-\midrule
-Vehicle Mass & ''' + f"{result['mass_kg']}" + r''' kg \\
-Number of Wheels & ''' + f"{result['num_wheels']}" + r''' \\
-Weight (W = m $\times$ g) & ''' + f"{result['weight_n']:.2f}" + r''' N \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection*{Operating Conditions}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\
-\midrule
-Speed & ''' + f"{result['speed_kmh']}" + r''' km/h (''' + f"{result['speed_ms']}" + r''' m/s) \\
-Coefficient of Friction & ''' + f"{result['mu']}" + r''' \\
-Reaction Time & ''' + f"{result['reaction_time']}" + r''' s \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection*{Track Gradient}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\
-\midrule
-Gradient Value & ''' + f"{result['gradient']}" + r''' (''' + escape_latex(result['gradient_type']) + r''') \\
-Gradient Angle & ''' + f"{result['angle_deg']}" + r''' degrees \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\section*{Calculation Results}
-
-\subsection*{Forces Analysis}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\
-\midrule
-Gravitational Force Component & ''' + f"{result['gravitational_force_n']:.2f}" + r''' N \\
-Maximum Braking Force & ''' + f"{result['max_braking_force_n']:.2f}" + r''' N \\
-Net Braking Force & ''' + f"{result['net_force_n']:.2f}" + r''' N \\
-Braking Force per Wheel & ''' + f"{result['braking_force_per_wheel_n']:.2f}" + r''' N \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection*{Braking Performance}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Parameter} & \textbf{Value} \\
-\midrule
-Deceleration & ''' + f"{result['deceleration_m_s2']:.4f}" + r''' m/s$^2$ \\
-Reaction Distance & ''' + f"{result['reaction_distance_m']:.2f}" + r''' m \\
-Braking Distance & ''' + f"{result['braking_distance_m']}" + r''' m \\
-\textbf{Total Stopping Distance} & \textbf{''' + f"{result['total_stopping_distance_m']}" + r''' m} \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\subsection*{Standard Compliance}
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-\textbf{Standard} & \textbf{Status} \\
-\midrule
-DIN EN 15746-2:2021-05 & ''' + escape_latex(result['standard_compliance']) + r''' \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\section*{Formulas Used}
-
-\begin{itemize}
-    \item \textbf{Weight:} $W = m \times g$ where $g = 9.81$ m/s$^2$
-    \item \textbf{Gravitational Force:} $F_g = W \times \sin(\theta)$
-    \item \textbf{Maximum Braking Force:} $F_b = \mu \times W$
-    \item \textbf{Net Force:} $F_{net} = F_b \pm F_g$
-    \item \textbf{Deceleration:} $a = F_{net} / m$
-    \item \textbf{Reaction Distance:} $d_r = v \times t_r$
-    \item \textbf{Braking Distance:} $d_b = v^2 / (2a)$
-    \item \textbf{Total Stopping Distance:} $d_{total} = d_r + d_b$
-\end{itemize}
-
-\vfill
-\begin{center}
-    \rule{\textwidth}{0.5pt} \\[0.2cm]
-    \textit{Premnath Engineering Works - Railway Engineering Division}
-\end{center}
-
-\end{document}'''
+            # Render the template with context data
+            rendered_tex = template.render(context)
             
             # Create temporary directory
             with tempfile.TemporaryDirectory() as tmpdir:
                 tex_file = os.path.join(tmpdir, "braking_report.tex")
                 pdf_file = os.path.join(tmpdir, "braking_report.pdf")
                 
-                # Write LaTeX file
+                # Copy image files if they exist (optional for template.tex)
+                # Try both .JPG and .png extensions
+                logo_mappings = {
+                    'logo.JPG': ['logo.png', 'logo.jpg', 'logo.JPG'],
+                    'logo-1.JPG': ['logo.png', 'logo-1.png', 'logo-1.jpg', 'logo-1.JPG'],
+                    'breaking distance table.png': ['breaking distance table.png', 'braking_distance_table.png']
+                }
+                
+                for target, sources in logo_mappings.items():
+                    for src in sources:
+                        if os.path.exists(src):
+                            shutil.copy(src, os.path.join(tmpdir, target))
+                            break
+                
+                # Write rendered LaTeX file
                 with open(tex_file, 'w', encoding='utf-8') as f:
-                    f.write(latex_content)
+                    f.write(rendered_tex)
                 
                 # Compile with pdflatex (run twice for proper formatting)
                 for _ in range(2):
