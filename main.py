@@ -111,7 +111,7 @@ class VehiclePerformanceRawInput(BaseModel):
 class BrakingRawInput(BaseModel):
     mass_kg: float
     reaction_time: float
-    num_wheels: int
+    num_wheels: int  # HTML sends 'num_wheels'
     calc_mode: str  # "Rail" or "Rail+Road"
     
     rail_speed_input: str  # Comma-separated speeds
