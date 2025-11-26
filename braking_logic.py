@@ -319,7 +319,9 @@ def perform_calculation_sequence(inputs):
         'total_stopping_distance_ts_new__Moving_down': down_data['total_stopping_distance'] if down_data else 0,
         'fmax': down_data['fmax'] if down_data else 0,
         'gbr': gbr,
-        'speed_list': rail_speeds
+        'speed_list': rail_speeds,
+        # Add standard_speed_inputs for template compatibility
+        'standard_speed_inputs': old_data_for_report
     }
     
     return results_table_rows, context

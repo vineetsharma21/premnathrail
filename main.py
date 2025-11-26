@@ -527,9 +527,14 @@ async def handle_braking_calculation(raw: BrakingRawInput):
 
 @app.post("/download_braking_report")
 async def download_braking_report(raw: BrakingRawInput):
+    print("=" * 80)
+    print("DEBUG: download_braking_report ENDPOINT CALLED!")
+    print("=" * 80)
     try:
         inputs = raw.dict()
+        print(f"DEBUG: Received inputs: {inputs}")
         results_table_rows, context = perform_calculation_sequence(inputs)
+        print(f"DEBUG: Context keys: {list(context.keys())}")
         
         # Try LaTeX with Jinja2 template
         try:
@@ -541,7 +546,17 @@ async def download_braking_report(raw: BrakingRawInput):
             template = env.get_template('template.tex')
             
             # Render the template with context data
-            rendered_tex = template.render(context)
+            print("DEBUG: Starting template rendering...")
+            try:
+                rendered_tex = template.render(context)
+                print(f"DEBUG: Template rendered successfully. Length: {len(rendered_tex)}")
+            except Exception as render_err:
+                print(f"DEBUG: Template rendering FAILED!")
+                print(f"DEBUG: Error type: {type(render_err).__name__}")
+                print(f"DEBUG: Error message: {str(render_err)}")
+                import traceback
+                traceback.print_exc()
+                raise
             
             # Create temporary directory
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -565,18 +580,25 @@ async def download_braking_report(raw: BrakingRawInput):
                 # Write rendered LaTeX file
                 with open(tex_file, 'w', encoding='utf-8') as f:
                     f.write(rendered_tex)
+                print(f"DEBUG: Wrote .tex file to {tex_file}")
                 
                 # Compile with pdflatex (run twice for proper formatting)
-                for _ in range(2):
+                print("DEBUG: Starting pdflatex compilation...")
+                for i in range(2):
                     result_proc = subprocess.run(
                         ['pdflatex', '-interaction=nonstopmode', '-output-directory', tmpdir, tex_file],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         timeout=30
                     )
+                    print(f"DEBUG: pdflatex run {i+1} completed. Return code: {result_proc.returncode}")
+                    if result_proc.returncode != 0:
+                        print(f"DEBUG: pdflatex stderr: {result_proc.stderr.decode('utf-8', errors='ignore')}")
+                        print(f"DEBUG: pdflatex stdout: {result_proc.stdout.decode('utf-8', errors='ignore')}")
                 
                 # Check if PDF was created
                 if os.path.exists(pdf_file):
+                    print(f"DEBUG: PDF created successfully at {pdf_file}")
                     with open(pdf_file, 'rb') as f:
                         pdf_content = f.read()
                     
@@ -586,10 +608,14 @@ async def download_braking_report(raw: BrakingRawInput):
                         headers={"Content-Disposition": "attachment; filename=Braking_Performance_Report.pdf"}
                     )
                 else:
+                    print(f"DEBUG: PDF file not found at {pdf_file}")
                     raise FileNotFoundError("PDF not generated")
                     
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as latex_error:
             # Fallback to ReportLab if LaTeX fails
+            print(f"DEBUG: LaTeX error: {type(latex_error).__name__}: {str(latex_error)}")
+            import traceback
+            traceback.print_exc()
             from reportlab.lib.pagesizes import letter, A4
             from reportlab.lib import colors
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -691,6 +717,9 @@ async def download_braking_report(raw: BrakingRawInput):
             )
             
     except Exception as e:
+        print(f"DEBUG: OUTER EXCEPTION: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, str(e))
 
 if __name__ == "__main__":
