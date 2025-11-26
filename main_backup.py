@@ -31,7 +31,12 @@ from LoadDistribution_Logic import format_detailed_steps as format_load_distro_s
 from LoadDistribution_Logic import create_report_docx as create_load_distro_docx
 from Tractive_Effort_Logic import perform_te_calculations, format_te_report_text, create_te_report_docx
 from Vehicle_Performance_Logic import VehiclePerformanceCalculator
-from braking_logic import perform_calculation_sequence
+from braking_logic import (
+    calculate_braking_performance,
+    calculate_multi_speed_analysis,
+    calculate_multi_gradient_analysis,
+    prepare_template_data_for_pdf
+)
 
 # --- DATABASE SETUP ---
 models.Base.metadata.create_all(bind=engine)
@@ -110,24 +115,14 @@ class VehiclePerformanceRawInput(BaseModel):
 
 class BrakingRawInput(BaseModel):
     mass_kg: float
+    speed_kmh: float
+    mu: float
     reaction_time: float
+    gradient: float
+    gradient_type: str
     num_wheels: int
-    calc_mode: str  # "Rail" or "Rail+Road"
-    
-    rail_speed_input: str  # Comma-separated speeds
-    rail_gradient_input: str  # Comma-separated gradients
-    rail_gradient_type: str  # "Degree (°)", "1 in G", or "Percentage (%)"
-    
-    road_speed_input: Optional[str] = ""
-    road_gradient_input: Optional[str] = ""
-    road_gradient_type: Optional[str] = "Percentage (%)"
-    mu: Optional[float] = 0.7
-    
-    doc_no: Optional[str] = ""
-    made_by: Optional[str] = ""
-    checked_by: Optional[str] = ""
-    approved_by: Optional[str] = ""
-    wheel_dia: Optional[float] = 0
+    speed_increment: Optional[float] = 10.0
+    gradient_steps: Optional[int] = 5
 
 # ---------- Validation Functions ----------
 def _validate_input(value_str: str, type_func, name: str, is_optional=False, default=0.0, is_disabled=False):
@@ -519,17 +514,75 @@ async def dl_perf(raw: VehiclePerformanceRawInput):
 @app.post("/braking_calculate")
 async def handle_braking_calculation(raw: BrakingRawInput):
     try:
-        inputs = raw.dict()
-        results_table_rows, context = perform_calculation_sequence(inputs)
-        return {"rows": results_table_rows}
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        result = calculate_braking_performance(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/braking_multi_speed")
+async def handle_braking_multi_speed(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        results = calculate_multi_speed_analysis(
+            mass_kg=inp['mass_kg'],
+            max_speed_kmh=inp['speed_kmh'],
+            speed_increment=inp['speed_increment'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/braking_multi_gradient")
+async def handle_braking_multi_gradient(raw: BrakingRawInput):
+    try:
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        results = calculate_multi_gradient_analysis(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            max_gradient=inp['gradient'],
+            gradient_steps=inp['gradient_steps'],
+            gradient_type=inp['gradient_type'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            num_wheels=inp['num_wheels']
+        )
+        return {"results": results}
     except Exception as e:
         raise HTTPException(500, str(e))
 
 @app.post("/download_braking_report")
 async def download_braking_report(raw: BrakingRawInput):
     try:
-        inputs = raw.dict()
-        results_table_rows, context = perform_calculation_sequence(inputs)
+        inp, raw_inp = process_and_validate_braking_inputs(raw)
+        
+        # Prepare comprehensive template data
+        context = prepare_template_data_for_pdf(
+            mass_kg=inp['mass_kg'],
+            speed_kmh=inp['speed_kmh'],
+            mu=inp['mu'],
+            reaction_time=inp['reaction_time'],
+            gradient=inp['gradient'],
+            gradient_type=inp['gradient_type'],
+            num_wheels=inp['num_wheels'],
+            doc_no="",  # Can be added to input form later
+            made_by="",
+            checked_by="",
+            approved_by=""
+        )
         
         # Try LaTeX with Jinja2 template
         try:

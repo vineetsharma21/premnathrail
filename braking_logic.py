@@ -1,342 +1,325 @@
 """
 Braking Performance Calculator - Backend Logic
 Based on DIN EN 15746-2:2021-05 standards for railway vehicles
+Matches the exact calculation logic from the desktop application (braking.py)
 """
 
 import math
+import re
 from typing import Dict, Any, List
 
-
 # =============================================================================
-# CONSTANTS
+# CONSTANTS & STANDARDS
 # =============================================================================
-g = 9.81  # Gravitational acceleration (m/s²)
+G = 9.81
 
-# Standard braking distances for different speeds (DIN EN 15746-2:2021-05)
+# Standard braking distances (Reference for calculating Force Capability)
 BRAKING_DATA = {
     8: 3, 10: 5, 16: 12, 20: 20, 24: 28,
     30: 45, 32: 50, 40: 75, 50: 135, 60: 180
 }
 
-# Maximum allowed total stopping distances for different speeds
+# Limits for Compliance Checking
 MAX_STOPPING_DISTANCES = {
     8: 6, 10: 9, 16: 18, 20: 27, 24: 36,
     30: 55, 32: 60, 40: 90, 50: 155, 60: 230,
     70: 300, 80: 400, 90: 500, 100: 620
 }
 
-
 # =============================================================================
-# GRADIENT CONVERSION FUNCTIONS
+# HELPER FUNCTIONS
 # =============================================================================
-def convert_gradient_to_angle(gradient_value: float, gradient_type: str) -> float:
-    """
-    Convert gradient to angle in degrees.
-    
-    Args:
-        gradient_value: The gradient value
-        gradient_type: Type of gradient - 'degree', '1in', or 'percent'
-    
-    Returns:
-        Angle in degrees
-    """
-    if gradient_type == "degree":
-        return gradient_value
-    elif gradient_type == "1in":
-        if gradient_value == 0:
-            return 0.0
-        return round(math.degrees(math.atan(1 / gradient_value)), 4)
-    elif gradient_type == "percent":
-        return round(math.degrees(math.atan(gradient_value / 100)), 4)
-    else:
-        raise ValueError(f"Invalid gradient type: {gradient_type}")
+def parse_list(input_str):
+    """Parse comma-separated string into list of floats"""
+    if not input_str:
+        return []
+    try:
+        # Handle "10, 20" or just "10"
+        return [float(x.strip()) for x in str(input_str).split(',') if x.strip()]
+    except:
+        return []
 
+def calculate_angle(gradient_val, gradient_type):
+    """Convert gradient to angle in degrees"""
+    if gradient_val == 0:
+        return 0.0
+    if gradient_type == "Degree (°)":
+        return float(gradient_val)
+    elif gradient_type == "1 in G":
+        return math.degrees(math.atan(1 / gradient_val)) if gradient_val != 0 else 0
+    else:  # Percentage
+        return math.degrees(math.atan(gradient_val / 100))
 
-# =============================================================================
-# CORE CALCULATION FUNCTIONS
-# =============================================================================
-def calculate_braking_performance(
-    mass_kg: float,
-    speed_kmh: float,
-    mu: float = 0.3,
-    reaction_time: float = 1.0,
-    gradient: float = 0.0,
-    gradient_type: str = "percent",
-    num_wheels: int = 4
-) -> Dict[str, Any]:
-    """
-    Calculate braking performance for a vehicle.
-    
-    Args:
-        mass_kg: Vehicle mass in kg
-        speed_kmh: Speed in km/h
-        mu: Coefficient of friction
-        reaction_time: Reaction time in seconds
-        gradient: Gradient value
-        gradient_type: Type of gradient ('degree', '1in', or 'percent')
-        num_wheels: Number of wheels
-    
-    Returns:
-        Dictionary containing all calculation results
-    """
-    # Convert speed to m/s
-    speed_ms = round(speed_kmh * (1000 / 3600), 2)
-    
-    # Convert gradient to angle
-    angle_deg = convert_gradient_to_angle(gradient, gradient_type)
-    angle_rad = math.radians(angle_deg)
-    
-    # Weight and gravitational force
-    weight_n = round(mass_kg * g, 2)
-    
-    # Gravitational force component along the slope
-    fg_n = round(weight_n * math.sin(angle_rad), 2)
-    
-    # Maximum braking force based on friction
-    max_braking_force = round(mu * weight_n, 2)
-    
-    # Net braking force (considering gradient)
-    if gradient > 0:  # Uphill
-        net_force = round(max_braking_force + fg_n, 2)
-    else:  # Downhill or flat
-        net_force = round(max_braking_force - fg_n, 2)
-    
-    # Deceleration
-    deceleration = round(net_force / mass_kg, 4) if mass_kg > 0 else 0.0
-    
-    # Reaction distance
-    reaction_distance = round(speed_ms * reaction_time, 2)
-    
-    # Braking distance
-    if deceleration > 0:
-        braking_distance = round((speed_ms ** 2) / (2 * deceleration), 2)
-    else:
-        braking_distance = float('inf')
-    
-    # Total stopping distance
-    if braking_distance != float('inf'):
-        total_stopping_distance = round(reaction_distance + braking_distance, 2)
-    else:
-        total_stopping_distance = float('inf')
-    
-    # Braking force per wheel
-    braking_force_per_wheel = round(max_braking_force / num_wheels, 2) if num_wheels > 0 else 0.0
-    
-    # Standard compliance check
-    standard_compliance = check_standard_compliance(speed_kmh, total_stopping_distance)
-    
-    return {
-        "speed_kmh": speed_kmh,
-        "speed_ms": speed_ms,
-        "mass_kg": mass_kg,
-        "weight_n": weight_n,
-        "mu": mu,
-        "reaction_time": reaction_time,
-        "gradient": gradient,
-        "gradient_type": gradient_type,
-        "angle_deg": angle_deg,
-        "num_wheels": num_wheels,
-        "gravitational_force_n": fg_n,
-        "max_braking_force_n": max_braking_force,
-        "net_force_n": net_force,
-        "deceleration_m_s2": deceleration,
-        "reaction_distance_m": reaction_distance,
-        "braking_distance_m": braking_distance,
-        "total_stopping_distance_m": total_stopping_distance,
-        "braking_force_per_wheel_n": braking_force_per_wheel,
-        "standard_compliance": standard_compliance
-    }
-
-
-def calculate_multi_speed_analysis(
-    mass_kg: float,
-    max_speed_kmh: float,
-    speed_increment: float,
-    mu: float = 0.3,
-    reaction_time: float = 1.0,
-    gradient: float = 0.0,
-    gradient_type: str = "percent",
-    num_wheels: int = 4
-) -> List[Dict[str, Any]]:
-    """
-    Calculate braking performance for multiple speeds.
-    
-    Args:
-        mass_kg: Vehicle mass in kg
-        max_speed_kmh: Maximum speed in km/h
-        speed_increment: Speed increment for analysis
-        mu: Coefficient of friction
-        reaction_time: Reaction time in seconds
-        gradient: Gradient value
-        gradient_type: Type of gradient
-        num_wheels: Number of wheels
-    
-    Returns:
-        List of calculation results for each speed
-    """
-    results = []
-    current_speed = speed_increment
-    
-    while current_speed <= max_speed_kmh:
-        result = calculate_braking_performance(
-            mass_kg=mass_kg,
-            speed_kmh=current_speed,
-            mu=mu,
-            reaction_time=reaction_time,
-            gradient=gradient,
-            gradient_type=gradient_type,
-            num_wheels=num_wheels
-        )
-        results.append(result)
-        current_speed += speed_increment
-    
-    return results
-
-
-def calculate_multi_gradient_analysis(
-    mass_kg: float,
-    speed_kmh: float,
-    max_gradient: float,
-    gradient_steps: int,
-    gradient_type: str = "percent",
-    mu: float = 0.3,
-    reaction_time: float = 1.0,
-    num_wheels: int = 4
-) -> List[Dict[str, Any]]:
-    """
-    Calculate braking performance for multiple gradients.
-    
-    Args:
-        mass_kg: Vehicle mass in kg
-        speed_kmh: Speed in km/h
-        max_gradient: Maximum gradient value
-        gradient_steps: Number of gradient steps
-        gradient_type: Type of gradient
-        mu: Coefficient of friction
-        reaction_time: Reaction time in seconds
-        num_wheels: Number of wheels
-    
-    Returns:
-        List of calculation results for each gradient
-    """
-    results = []
-    gradient_increment = max_gradient / gradient_steps if gradient_steps > 0 else 0
-    
-    # Include flat surface (0 gradient)
-    result = calculate_braking_performance(
-        mass_kg=mass_kg,
-        speed_kmh=speed_kmh,
-        mu=mu,
-        reaction_time=reaction_time,
-        gradient=0.0,
-        gradient_type=gradient_type,
-        num_wheels=num_wheels
-    )
-    results.append(result)
-    
-    # Calculate for incremental gradients
-    for i in range(1, gradient_steps + 1):
-        current_gradient = gradient_increment * i
-        result = calculate_braking_performance(
-            mass_kg=mass_kg,
-            speed_kmh=speed_kmh,
-            mu=mu,
-            reaction_time=reaction_time,
-            gradient=current_gradient,
-            gradient_type=gradient_type,
-            num_wheels=num_wheels
-        )
-        results.append(result)
-    
-    return results
-
-
-def check_standard_compliance(speed_kmh: float, calculated_distance: float) -> str:
-    """
-    Check if the calculated stopping distance complies with EN standard.
-    
-    Args:
-        speed_kmh: Speed in km/h
-        calculated_distance: Calculated total stopping distance in meters
-    
-    Returns:
-        Compliance status string
-    """
-    if calculated_distance == float('inf'):
-        return "✗ Physical Limit Exceeded"
-    
-    # Find the relevant standard limit for the given speed
+def get_compliance(speed, total_dist):
+    """Check if stopping distance complies with EN standard"""
+    # Find the appropriate limit for the current speed
     allowed_distance = None
-    for speed_limit in sorted(MAX_STOPPING_DISTANCES.keys(), reverse=True):
-        if speed_kmh >= speed_limit:
-            allowed_distance = MAX_STOPPING_DISTANCES[speed_limit]
+    for limit_speed in sorted(MAX_STOPPING_DISTANCES.keys(), reverse=True):
+        if speed >= limit_speed:
+            allowed_distance = MAX_STOPPING_DISTANCES[limit_speed]
             break
-    
+            
     if allowed_distance is None:
         return "Standard Not Found"
     
-    if calculated_distance <= allowed_distance:
+    if total_dist <= allowed_distance:
         return "✓ Standard Followed"
     else:
         return "✗ Standard Exceeded"
 
-
-def calculate_gbr(braking_force_n: float, mass_kg: float) -> float:
-    """
-    Calculate Global Braking Ratio (GBR).
-    GBR = Braking Force / (Mass × g)
-    
-    Args:
-        braking_force_n: Braking force in Newtons
-        mass_kg: Mass in kg
-    
-    Returns:
-        GBR value
-    """
-    if mass_kg <= 0:
-        return 0.0
-    return round(braking_force_n / (mass_kg * g), 4)
-
-
-# =============================================================================
-# REPORT GENERATION HELPERS
-# =============================================================================
-def format_result_for_display(result: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Format calculation result for display.
-    
-    Args:
-        result: Raw calculation result
-    
-    Returns:
-        Formatted result dictionary
-    """
-    return {
-        "Speed (km/h)": result["speed_kmh"],
-        "Speed (m/s)": result["speed_ms"],
-        "Reaction Distance (m)": result["reaction_distance_m"],
-        "Braking Distance (m)": result["braking_distance_m"],
-        "Total Stopping Distance (m)": result["total_stopping_distance_m"],
-        "Deceleration (m/s²)": result["deceleration_m_s2"],
-        "Braking Force (N)": result["max_braking_force_n"],
-        "Net Force (N)": result["net_force_n"],
-        "Standard Compliance": result["standard_compliance"]
+def escape_latex(s):
+    """Escape special LaTeX characters"""
+    if not isinstance(s, str):
+        return s
+    mapping = {
+        '&': r'\&', '%': r'\%', '$': r'\$', '#': r'\#', '_': r'\_',
+        '{': r'\{', '}': r'\}', '~': r'\textasciitilde{}',
+        '^': r'\textasciicircum{}', '\\': r'\textbackslash{}', ';': r'\;', ':': r'\:',
     }
+    return re.sub(r'[&%$#_{}~^;:\\\\]', lambda m: mapping.get(m.group(0)), s)
 
-
-def get_standard_table_data() -> List[Dict[str, Any]]:
+# =============================================================================
+# MAIN LOGIC
+# =============================================================================
+def perform_calculation_sequence(inputs):
     """
-    Get the standard braking distance table data.
+    Main calculation function matching desktop app logic exactly.
+    Calculates braking performance for rail and road modes.
+    """
+    results_table_rows = []
+    rail_detailed_calcs = []
+    road_detailed_calcs = []
     
-    Returns:
-        List of standard data entries
-    """
-    table_data = []
-    for speed, braking_dist in sorted(BRAKING_DATA.items()):
-        max_stop_dist = MAX_STOPPING_DISTANCES.get(speed, "N/A")
-        table_data.append({
-            "speed_kmh": speed,
-            "braking_distance_m": braking_dist,
-            "max_stopping_distance_m": max_stop_dist
-        })
-    return table_data
+    mass_kg = inputs['mass_kg']
+    weight_n = mass_kg * G
+    reaction_time = inputs['reaction_time']
+    num_wheels = inputs['num_wheels']
+    
+    # -------------------------------------------------------------------------
+    # STEP 1: CALCULATE GLOBAL MAX BRAKING FORCE (RAIL)
+    # -------------------------------------------------------------------------
+    # This logic matches 'perform_calculations' in desktop app.
+    # It checks ALL standard speeds to find the required force capability.
+    
+    old_data_for_report = {}
+    max_rail_force = 0.0
+    
+    for speed, dist in sorted(BRAKING_DATA.items()):
+        v_ms = speed / 3.6
+        # Deceleration required on flat to meet this specific standard distance
+        decel_required = (v_ms**2) / (2 * dist)
+        force_required = mass_kg * decel_required
+        
+        # Store for PDF Table 1
+        old_data_for_report[speed] = {
+            'speed_ms': round(v_ms, 2),
+            'braking_distance': dist,
+            'deceleration': round(decel_required, 4),
+            'reaction_distance': round(v_ms * reaction_time, 2),
+            'total_stopping_distance': round((v_ms * reaction_time) + dist, 2),
+            'braking_force': round(force_required, 2)
+        }
+        
+        # Keep track of the maximum force required across all standards
+        if force_required > max_rail_force:
+            max_rail_force = force_required
+
+    # -------------------------------------------------------------------------
+    # STEP 2: RAIL CALCULATION LOOP (Using Global Max Force)
+    # -------------------------------------------------------------------------
+    rail_speeds = parse_list(inputs['rail_speed_input'])
+    rail_gradients = parse_list(inputs['rail_gradient_input'])
+    
+    # Ensure 0 gradient is always calculated
+    rail_gradients_with_flat = sorted(list(set([0.0] + rail_gradients)))
+    
+    for grad_val in rail_gradients_with_flat:
+        
+        # Determine Scenarios
+        scenarios = ["Straight Track"]
+        if grad_val > 0:
+            scenarios = ["Moving up", "Moving down"]  # Desktop app replaces Straight with Up/Down if gradient exists
+            
+        for scenario in scenarios:
+            for speed in sorted(rail_speeds):
+                
+                v_ms = speed / 3.6
+                current_grad = 0 if scenario == "Straight Track" else grad_val
+                angle_deg = calculate_angle(current_grad, inputs['rail_gradient_type'])
+                
+                grav_force_slope = weight_n * math.sin(math.radians(angle_deg))
+                
+                # Determine Net Force using the GLOBAL max_rail_force
+                if scenario == "Straight Track":
+                    f_net = max_rail_force
+                    eff_grav = 0
+                elif scenario == "Moving up":
+                    f_net = max_rail_force + grav_force_slope  # Gravity helps
+                    eff_grav = grav_force_slope
+                elif scenario == "Moving down":
+                    f_net = max_rail_force - grav_force_slope  # Gravity fights
+                    eff_grav = grav_force_slope
+                
+                # Calculate Deceleration
+                decel = f_net / mass_kg
+                
+                # Physics Checks
+                if decel <= 0:
+                    decel = 0
+                    bd = 999999  # Infinity
+                else:
+                    bd = (v_ms**2) / (2 * decel)
+                
+                reaction_dist = v_ms * reaction_time
+                total_dist = reaction_dist + bd
+                
+                # Check Compliance against Max Limits
+                compliance = get_compliance(speed, total_dist)
+                
+                # 1. Add to Table Output
+                results_table_rows.append({
+                    "mode": "Rail",
+                    "scenario": scenario,
+                    "speed": speed,
+                    "gradient": f"{current_grad} ({inputs['rail_gradient_type']})" if current_grad > 0 else "0",
+                    "net_force": round(f_net, 2),
+                    "decel": round(decel, 2),
+                    "dist": round(bd, 2) if bd < 99999 else "Inf",
+                    "total": round(total_dist, 2) if bd < 99999 else "Inf",
+                    "status": compliance
+                })
+                
+                # 2. Add to PDF List
+                rail_detailed_calcs.append({
+                    'scenario': scenario,
+                    'speed_kmh': speed,
+                    'v_ms': round(v_ms, 2),
+                    'v_ms_squared': round(v_ms**2, 2),
+                    'gradient_value': current_grad,
+                    'angle_deg': round(angle_deg, 2),
+                    'mass_kg': mass_kg,
+                    'weight_n': round(weight_n, 2),
+                    'fmax': round(weight_n * math.sin(math.radians(angle_deg)), 2),  # Holding Force
+                    'f_g': round(eff_grav, 2),
+                    'max_braking_force': round(max_rail_force, 2),
+                    'f_net': round(f_net, 2),
+                    'a_deceleration': round(decel, 2),
+                    'a_deceleration_doubled': round(decel*2, 2),
+                    'reaction_distance': round(reaction_dist, 2),
+                    'braking_distance': round(bd, 2),
+                    'total_stopping_distance': round(total_dist, 2)
+                })
+
+    # -------------------------------------------------------------------------
+    # STEP 3: ROAD CALCULATION LOOP (Friction Based)
+    # -------------------------------------------------------------------------
+    if inputs['calc_mode'] == "Rail+Road":
+        road_speeds = parse_list(inputs['road_speed_input'])
+        road_gradients = parse_list(inputs['road_gradient_input'])
+        road_gradients = sorted(list(set([0.0] + road_gradients)))
+        
+        for grad_val in road_gradients:
+            for speed in sorted(road_speeds):
+                
+                v_ms = speed / 3.6
+                angle = calculate_angle(grad_val, inputs['road_gradient_type'])
+                
+                normal = weight_n * math.cos(math.radians(angle))
+                grav = weight_n * math.sin(math.radians(angle))
+                
+                # Friction Force
+                friction_f = inputs['mu'] * normal
+                
+                # Net Force (Assuming stopping on slope/moving down logic is standard safety calc)
+                # Friction fights gravity
+                net = friction_f - grav
+                
+                decel = net / mass_kg
+                if decel <= 0:
+                    decel = 0
+                    bd = 999999
+                else:
+                    bd = (v_ms**2) / (2 * decel)
+                    
+                rd = v_ms * reaction_time
+                td = rd + bd
+                
+                results_table_rows.append({
+                    "mode": "Road",
+                    "scenario": "Friction",
+                    "speed": speed,
+                    "gradient": f"{grad_val}",
+                    "net_force": round(net, 2),
+                    "decel": round(decel, 2),
+                    "dist": round(bd, 2) if bd < 99999 else "Inf",
+                    "total": round(td, 2) if td < 99999 else "Inf",
+                    "status": "N/A"
+                })
+                
+                road_detailed_calcs.append({
+                    'gradient_value': grad_val, 'speed_kmh': speed,
+                    'v_ms': round(v_ms, 2), 'v_ms_squared': round(v_ms**2, 2),
+                    'mass_kg': mass_kg, 'weight_n': round(weight_n, 2),
+                    'friction': inputs['mu'], 'angle_deg': round(angle, 2),
+                    'fmax': round(weight_n * math.sin(math.radians(angle)), 2),
+                    'normal_force': round(normal, 2), 'fb_friction': round(friction_f, 2),
+                    'f_g': round(grav, 2), 'f_net': round(net, 2),
+                    'a_deceleration': round(decel, 2), 'a_deceleration_doubled': round(decel*2, 2),
+                    'reaction_distance': round(rd, 2), 'braking_distance': round(bd, 2),
+                    'total_stopping_distance': round(td, 2)
+                })
+
+    # -------------------------------------------------------------------------
+    # STEP 4: SUMMARY & CONTEXT
+    # -------------------------------------------------------------------------
+    # Find critical data for summary (Moving Down)
+    down_data = next((x for x in rail_detailed_calcs if x["scenario"] == "Moving down"), None)
+    
+    # Example calculation data (uses max speed input)
+    max_input_speed = max(rail_speeds) if rail_speeds else 0
+    ref_v = max_input_speed / 3.6
+    
+    # Find ref distance from table for this specific speed (or closest)
+    ref_dist = 50
+    for s in sorted(BRAKING_DATA.keys(), reverse=True):
+        if max_input_speed >= s:
+            ref_dist = BRAKING_DATA[s]
+            break
+            
+    # Calculate values for the "Example" section of PDF
+    ref_decel = (ref_v**2) / (2 * ref_dist)
+    ref_force = mass_kg * ref_decel
+    
+    # Calculate GBR (Gross Braking Ratio)
+    gbr = round((max_rail_force / (mass_kg * G)) * 100, 2) if mass_kg > 0 else 0
+
+    context = {
+        'doc_no': escape_latex(inputs.get('doc_no', '')),
+        'made_by': escape_latex(inputs.get('made_by', '')),
+        'checked_by': escape_latex(inputs.get('checked_by', '')),
+        'approved_by': escape_latex(inputs.get('approved_by', '')),
+        'mass_kg': mass_kg, 'weight_n': round(weight_n, 2),
+        'speed_kmh': max_input_speed, 'v_ms': round(ref_v, 2),
+        'reaction_time': reaction_time, 'Reaction_distance': round(ref_v * reaction_time, 2),
+        'reference_speed_for_force': max_input_speed, 'reference_braking_dist': ref_dist,
+        'decel': round(ref_decel, 2), 'totl_sto_distan': round((ref_v*reaction_time)+ref_dist, 2),
+        'fb': round(ref_force, 2),
+        'gradient_input': max(rail_gradients) if rail_gradients else 0,
+        'gradient_type': escape_latex(inputs.get('rail_gradient_type', '')),
+        'road_gradient_type': escape_latex(inputs.get('road_gradient_type', '')),
+        'number_of_wheels': num_wheels,
+        'wheel_dia': inputs.get('wheel_dia', 0),
+        'wheel_radius': inputs.get('wheel_dia', 0) / 2 if inputs.get('wheel_dia') else 0,
+        'friction_coefficient': inputs.get('mu', 0.7),
+        'max_braking_force': round(max_rail_force, 2),
+        'min_braking_force': round(max_rail_force/num_wheels, 2) if num_wheels else 0,
+        'old_data_for_report': old_data_for_report,
+        'rail_detailed_calcs': rail_detailed_calcs,
+        'road_detailed_calcs': road_detailed_calcs,
+        'total_stopping_distance_ts_new__Moving_down': down_data['total_stopping_distance'] if down_data else 0,
+        'fmax': down_data['fmax'] if down_data else 0,
+        'gbr': gbr,
+        'speed_list': rail_speeds
+    }
+    
+    return results_table_rows, context
