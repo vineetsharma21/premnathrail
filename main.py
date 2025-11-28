@@ -346,7 +346,13 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid email or password")
-    return {"message": "Login successful", "user_id": db_user.id, "email": db_user.email, "is_license_active": db_user.is_license_active}
+    return {
+        "message": "Login successful", 
+        "user_id": db_user.id, 
+        "email": db_user.email, 
+        "is_license_active": db_user.is_license_active,
+        "is_admin": getattr(db_user, 'is_admin', False)
+    }
 
 @app.post("/activate_license")
 def activate_license(activation: schemas.LicenseActivate, user_id: int, db: Session = Depends(get_db)):
@@ -379,6 +385,11 @@ async def serve_signup():
 async def serve_profile():
     if os.path.exists("profile.html"): return FileResponse('profile.html')
     raise HTTPException(status_code=404, detail="profile.html not found")
+
+@app.get("/admin")
+async def serve_admin():
+    if os.path.exists("admin_dashboard.html"): return FileResponse('admin_dashboard.html')
+    raise HTTPException(status_code=404, detail="admin_dashboard.html not found")
     return HTTPException(status_code=404, detail="profile.html not found")
 
 @app.get("/calculator")
@@ -395,6 +406,11 @@ async def serve_te(): return FileResponse('tractive_effort_calculator.html')
 
 @app.get("/vehicle_performance")
 async def serve_vp(): return FileResponse('vehicle_performance_calculator.html')
+
+@app.get("/debug")
+async def serve_debug():
+    if os.path.exists("debug.html"): return FileResponse('debug.html')
+    raise HTTPException(status_code=404, detail="debug.html not found")
 
 @app.get("/braking")
 async def serve_braking():

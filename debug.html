@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug - Auth Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow">
+        <h1 class="text-2xl font-bold mb-4">🔍 Debug Authentication Status</h1>
+        
+        <div class="grid grid-cols-2 gap-6">
+            <div>
+                <h3 class="text-lg font-semibold mb-2">LocalStorage Values:</h3>
+                <div id="localStorage" class="bg-gray-100 p-4 rounded font-mono text-sm"></div>
+            </div>
+            
+            <div>
+                <h3 class="text-lg font-semibold mb-2">Test Actions:</h3>
+                <div class="space-y-2">
+                    <button onclick="testLogin()" class="bg-blue-500 text-white px-4 py-2 rounded w-full">Test Login API</button>
+                    <button onclick="clearStorage()" class="bg-red-500 text-white px-4 py-2 rounded w-full">Clear Storage</button>
+                    <button onclick="window.location.href='/'" class="bg-green-500 text-white px-4 py-2 rounded w-full">Go to Homepage</button>
+                    <button onclick="window.location.href='/login'" class="bg-purple-500 text-white px-4 py-2 rounded w-full">Go to Login</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-2">API Test Results:</h3>
+            <div id="apiResults" class="bg-gray-100 p-4 rounded font-mono text-sm min-h-20"></div>
+        </div>
+    </div>
+
+    <script>
+        function displayLocalStorage() {
+            const storage = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                storage[key] = localStorage.getItem(key);
+            }
+            document.getElementById('localStorage').innerHTML = JSON.stringify(storage, null, 2) || 'Empty';
+        }
+        
+        async function testLogin() {
+            const result = document.getElementById('apiResults');
+            result.innerHTML = 'Testing login...';
+            
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        email: 'admin@premnath.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await res.json();
+                result.innerHTML = `Status: ${res.status}\nResponse: ${JSON.stringify(data, null, 2)}`;
+                
+                if (res.ok) {
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('email', data.email);
+                    localStorage.setItem('is_license_active', data.is_license_active);
+                    localStorage.setItem('is_admin', data.is_admin);
+                    displayLocalStorage();
+                }
+            } catch (error) {
+                result.innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        function clearStorage() {
+            localStorage.clear();
+            displayLocalStorage();
+        }
+        
+        // Initial display
+        displayLocalStorage();
+        
+        // Auto refresh every 2 seconds
+        setInterval(displayLocalStorage, 2000);
+    </script>
+</body>
+</html>

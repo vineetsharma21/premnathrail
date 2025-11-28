@@ -9,6 +9,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_license_active = Column(Boolean, default=False) # Default False rahega jab tak key na dale
+    is_admin = Column(Boolean, default=False) # Admin flag
 
 # License Keys Table (Jo aap generate karke DB mein dalenge)
 class LicenseKey(Base):

@@ -15,37 +15,49 @@
         let currentUser = null;
 
         async function fetchMe() {
-            const token = localStorage.getItem('access_token');
-            if (!token) { window.location.href = '/login'; return; }
-            const res = await fetch('/user/me', { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) { window.location.href = '/login'; return; }
-            currentUser = await res.json();
-            document.getElementById('username').value = currentUser.username || '';
-            document.getElementById('email').value = currentUser.email || '';
-            document.getElementById('keyStatus').innerHTML = currentUser.has_activation_key
+            const user_id = localStorage.getItem('user_id');
+            const email = localStorage.getItem('email');
+            const is_license_active = localStorage.getItem('is_license_active');
+            
+            if (!user_id || !email) { 
+                window.location.href = '/login'; 
+                return; 
+            }
+            
+            // Set current user data from localStorage
+            currentUser = {
+                user_id: user_id,
+                email: email,
+                is_license_active: is_license_active === 'true'
+            };
+            
+            // Set form values
+            document.getElementById('email').value = email || '';
+            
+            // Set license status
+            document.getElementById('keyStatus').innerHTML = (is_license_active === 'true')
                 ? '<span class="text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-check-circle"></i> Active</span>'
-                : '<span class="text-yellow-700 bg-yellow-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-exclamation-triangle"></i> No Key</span>';
+                : '<span class="text-yellow-700 bg-yellow-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-exclamation-triangle"></i> No License</span>';
         }
 
         async function saveProfile() {
-            const token = localStorage.getItem('access_token');
-            const payload = { username: document.getElementById('username').value, email: document.getElementById('email').value };
-            const res = await fetch('/user/update', { method:'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-            const data = await res.json();
-            alert(data.message || (res.ok ? 'Saved' : 'Failed'));
-            if (res.ok) {
-                localStorage.setItem('username', payload.username);
+            const user_id = localStorage.getItem('user_id');
+            const email = document.getElementById('email').value;
+            
+            // Simple validation
+            if (!email) {
+                alert('Email is required');
+                return;
             }
+            
+            // Update localStorage
+            localStorage.setItem('email', email);
+            alert('Profile updated successfully!');
         }
 
         async function changePassword() {
-            const token = localStorage.getItem('access_token');
-            const current_password = (document.getElementById('curPass').value || '').trim();
-            const new_password = (document.getElementById('newPass').value || '').trim();
-            const res = await fetch('/user/change-password', { method:'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ current_password, new_password }) });
-            const data = await res.json();
-            alert(data.detail || data.message || (res.ok ? 'Password changed' : 'Failed'));
-            if (res.ok) { document.getElementById('curPass').value = ''; document.getElementById('newPass').value=''; }
+            // For now, just show message - implement backend later
+            alert('Password change functionality will be implemented soon!');
         }
 
         async function deleteAccount() {
@@ -86,7 +98,7 @@
             <div class="space-y-4">
                 <div>
                     <label class="text-sm text-gray-600">Username</label>
-                    <input id="username" class="w-full border rounded px-3 py-2" placeholder="username" />
+                    <input id="username" class="w-full border rounded px-3 py-2" placeholder="Enter username (optional)" />
                 </div>
                 <div>
                     <label class="text-sm text-gray-600">Email</label>

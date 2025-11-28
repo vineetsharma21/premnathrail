@@ -101,12 +101,11 @@
       localStorage.setItem('toolUsage', JSON.stringify(usage));
       
       // Send to backend for admin analytics
-      const token = localStorage.getItem('access_token');
-      if (token) {
+      const user_id = localStorage.getItem('user_id');
+      if (user_id) {
         fetch('/api/track-usage', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ tool: toolName, timestamp: new Date().toISOString() })
@@ -137,32 +136,34 @@
       initUsageTracking();
       updateUsageBadges();
       
-      const token = localStorage.getItem("access_token");
-      const username = localStorage.getItem("username");
-      const hasKey = localStorage.getItem("has_key") === "true";
-      const activationKey = localStorage.getItem("activation_key");
-      const isAdmin = localStorage.getItem("is_admin") === "true";
+      const user_id = localStorage.getItem("user_id");
+      const email = localStorage.getItem("email");
+      const is_license_active = localStorage.getItem("is_license_active") === "true";
+      const is_admin = localStorage.getItem("is_admin") === "true";
       const authSection = document.getElementById("auth-section");
+      
+      console.log('Index.html - Checking auth:', {
+        user_id: user_id,
+        email: email,
+        is_license_active: is_license_active,
+        is_admin: is_admin
+      }); // Debug log
 
-      if (token) {
-        // Show key notification if user has key
-        if (hasKey && activationKey) {
-          showKeyNotification(activationKey);
-        }
-
+      if (user_id) {
         // Agar User Logged In hai to ye dikhayein
         authSection.innerHTML = `
           <div class="flex items-center gap-3">
             <span class="text-blue-200 text-sm hidden md:inline font-medium flex items-center gap-2">
-              <i class="fas fa-user-circle"></i> ${username || 'Engineer'}
+              <i class="fas fa-user-circle"></i> ${email || 'Engineer'}
             </span>
             
-            ${hasKey 
-              ? '<span class="bg-green-600 text-white text-xs px-3 py-2 rounded-lg shadow flex items-center gap-1"><i class="fas fa-check-circle"></i> Key Active</span>' 
-              : '<span class="bg-yellow-500 text-white text-xs px-3 py-2 rounded-lg shadow flex items-center gap-1"><i class="fas fa-exclamation-triangle"></i> No Key</span>'}
+            ${is_license_active 
+              ? '<span class="bg-green-600 text-white text-xs px-3 py-2 rounded-lg shadow flex items-center gap-1"><i class="fas fa-check-circle"></i> Licensed</span>' 
+              : '<span class="bg-yellow-500 text-white text-xs px-3 py-2 rounded-lg shadow flex items-center gap-1"><i class="fas fa-exclamation-triangle"></i> No License</span>'}
 
             <a href="/profile" class="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-2 rounded-lg shadow transition flex items-center gap-1"><i class="fas fa-user"></i> Profile</a>
-            ${isAdmin 
+
+            ${is_admin 
               ? '<a href="/admin" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg hover:shadow-xl transition flex items-center gap-1"><i class="fas fa-crown"></i> Admin</a>' 
               : ''}
 
@@ -213,19 +214,19 @@
     function checkAccess(event, url, toolName) {
       event.preventDefault(); // Direct open hone se roko
       
-      const token = localStorage.getItem("access_token");
-      const hasKey = localStorage.getItem("has_key") === "true";
+      const user_id = localStorage.getItem("user_id");
+      const is_license_active = localStorage.getItem("is_license_active") === "true";
 
       // Check 1: Login hai ya nahi?
-      if (!token) {
+      if (!user_id) {
         alert("⚠️ Access Denied!\n\nPlease Login to use Engineering Tools.");
         window.location.href = "/login";
         return;
       }
       
-      // Check 2: Activation Key hai ya nahi?
-      if (!hasKey) {
-        alert("🔒 Activation Key Required!\n\nYour account doesn't have an activation key.\nPlease contact admin to get one.");
+      // Check 2: License active hai ya nahi?
+      if (!is_license_active) {
+        alert("🔒 License Required!\n\nYour account doesn't have an active license.\nPlease contact admin to activate your license.");
         return;
       }
       
