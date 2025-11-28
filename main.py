@@ -40,12 +40,55 @@ from BrakingWebLogic import BrakingCalculator
 # --- Setup ---
 from contextlib import asynccontextmanager
 
+def ensure_admin_column():
+    """Ensure is_admin column exists in production database"""
+    try:
+        # Import here to avoid circular import
+        from sqlalchemy import text
+        from database import engine
+        
+        with engine.connect() as conn:
+            # Check if is_admin column exists
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='users' AND column_name='is_admin';
+            """)).fetchone()
+            
+            if not result:
+                # Add is_admin column
+                conn.execute(text("""
+                    ALTER TABLE users 
+                    ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+                """))
+                print("✅ Added is_admin column to users table")
+            
+            # Commit the changes
+            conn.commit()
+            return True
+            
+    except Exception as e:
+        print(f"⚠️ Database column check warning: {e}")
+        return False
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("FastAPI application starting up...")
     print(f"Current working directory: {os.getcwd()}")
     print(f"Files in directory: {os.listdir('.')}")
+    
+    # Ensure database tables exist
+    try:
+        models.Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created successfully")
+        
+        # Ensure admin column exists
+        ensure_admin_column()
+        
+    except Exception as e:
+        print(f"⚠️ Database initialization warning: {e}")
+    
     yield
     # Shutdown (if needed)
 
@@ -63,13 +106,6 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"], 
 )
-
-# Initialize database tables
-try:
-    models.Base.metadata.create_all(bind=engine)
-    print("Database tables created successfully")
-except Exception as e:
-    print(f"Database initialization warning: {e}")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="."), name="static")
@@ -334,25 +370,41 @@ def process_and_validate_vehicle_performance_inputs(raw: VehiclePerformanceRawIn
 
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user: raise HTTPException(status_code=400, detail="Email already registered")
-    hashed_password = get_password_hash(user.password)
-    new_user = models.User(email=user.email, hashed_password=hashed_password)
-    db.add(new_user); db.commit(); db.refresh(new_user)
-    return {"message": "Account created successfully", "user_id": new_user.id}
+    try:
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if db_user: raise HTTPException(status_code=400, detail="Email already registered")
+        hashed_password = get_password_hash(user.password)
+        new_user = models.User(email=user.email, hashed_password=hashed_password)
+        db.add(new_user); db.commit(); db.refresh(new_user)
+        return {"message": "Account created successfully", "user_id": new_user.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Signup error: {e}")
+        raise HTTPException(status_code=500, detail="Database error. Please contact administrator.")
 
 @app.post("/login")
 def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if not db_user or not verify_password(user.password, db_user.hashed_password):
-        raise HTTPException(status_code=400, detail="Invalid email or password")
-    return {
-        "message": "Login successful", 
-        "user_id": db_user.id, 
-        "email": db_user.email, 
-        "is_license_active": db_user.is_license_active,
-        "is_admin": getattr(db_user, 'is_admin', False)
-    }
+    try:
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if not db_user or not verify_password(user.password, db_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Invalid email or password")
+        
+        # Safe fallback for is_admin column
+        is_admin = getattr(db_user, 'is_admin', False)
+        
+        return {
+            "message": "Login successful", 
+            "user_id": db_user.id, 
+            "email": db_user.email, 
+            "is_license_active": db_user.is_license_active,
+            "is_admin": is_admin
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Database error. Please contact administrator.")
 
 @app.post("/activate_license")
 def activate_license(activation: schemas.LicenseActivate, user_id: int, db: Session = Depends(get_db)):
