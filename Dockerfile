@@ -1,34 +1,42 @@
 FROM python:3.11-slim
 
-# Install OS packages including a reasonably complete TeX Live set for pdflatex
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system deps and a reasonable TeX Live subset for pdflatex
 RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
        build-essential \
        ca-certificates \
        wget \
-       git \
-       poppler-utils \
+       fontconfig \
+       fonts-dejavu-core \
+       lmodern \
+       texlive-latex-base \
        texlive-latex-recommended \
        texlive-latex-extra \
        texlive-fonts-recommended \
-       texlive-xetex \
-       libpq-dev \
-    && apt-get clean \
+       texlive-science \
+       texlive-pictures \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
 WORKDIR /app
 
-# Copy requirements and install
+# Install Python dependencies
 COPY requirements.txt /app/requirements.txt
-RUN python -m pip install --upgrade pip setuptools wheel
-RUN pip install -r /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy application
+# Copy app code
 COPY . /app
 
-ENV PYTHONUNBUFFERED=1
+# Create output folder and run as a non-root user
+RUN addgroup --system appgroup \
+    && adduser --system --ingroup appgroup appuser \
+    && mkdir -p /app/output \
+    && chown -R appuser:appgroup /app
 
-# Expose port and run with gunicorn + uvicorn worker
+USER appuser
+
 EXPOSE 8000
-CMD ["gunicorn", "main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+
+# Use gunicorn with uvicorn workers for production
+CMD ["gunicorn", "main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "120"]

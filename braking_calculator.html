@@ -6,308 +6,228 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body class="bg-gray-100 flex flex-col min-h-screen">
-  
-  <nav class="bg-blue-900 text-white shadow-lg">
-    <div class="mx-auto px-4">
-      <div class="flex justify-between">
-        <div class="flex space-x-7">
-          <div>
-            <a href="/" class="flex items-center py-2 px-2 shrink-0">
-              <img src="/logo.png" alt="Logo" class="h-12 w-auto mr-2" />
-            </a>
-          </div>
-          <div class="hidden md:flex items-center space-x-1">
-            <a href="/" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Home</a>
-            <a href="/calculator" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Hydraulic</a>
-            <a href="/qmax" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Qmax</a>
-            <a href="/load_distribution" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Load Distribution</a>
-            <a href="/tractive_effort" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Tractive Effort</a>
-            <a href="/vehicle_performance" class="py-4 px-2 text-gray-300 font-semibold hover:text-white transition duration-300">Vehicle Performance</a>
-            <a href="/braking" class="py-4 px-2 text-white bg-blue-800 font-semibold">Braking</a>
-          </div>
-        </div>
-        
-        <!-- Mobile menu button -->
-        <div class="md:hidden flex items-center">
-          <button class="outline-none mobile-menu-button">
-            <svg class="w-6 h-6 text-gray-300 hover:text-white" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" stroke="currentColor">
-              <path d="M4 6h16M4 12h16M4 18h16"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </div>
-    <!-- Mobile menu -->
-    <div class="hidden mobile-menu">
-      <ul class="">
-        <li><a href="/" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Home</a></li>
-        <li><a href="/calculator" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Hydraulic</a></li>
-        <li><a href="/qmax" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Qmax</a></li>
-        <li><a href="/load_distribution" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Load Distribution</a></li>
-        <li><a href="/tractive_effort" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Tractive Effort</a></li>
-        <li><a href="/vehicle_performance" class="block text-sm px-2 py-4 hover:bg-blue-800 transition duration-300">Vehicle Performance</a></li>
-        <li class="active"><a href="/braking" class="block text-sm px-2 py-4 text-white bg-blue-800 font-semibold">Braking</a></li>
-      </ul>
+<body class="bg-gray-100">
+
+  <nav class="bg-blue-900 text-white shadow-lg mb-6">
+    <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+      <a href="/" class="flex items-center gap-2">
+          <img src="/logo.png" alt="Logo" class="h-10 bg-white rounded p-1">
+          <span class="font-bold text-xl">Premnath Engineering</span>
+      </a>
+      <a href="/" class="hover:text-gray-300">Home</a>
     </div>
   </nav>
-  
-  <script>
-    // Mobile menu toggle
-    const btn = document.querySelector("button.mobile-menu-button");
-    const menu = document.querySelector(".mobile-menu");
-    if (btn && menu) {
-      btn.addEventListener("click", () => {
-        menu.classList.toggle("hidden");
-      });
-    }
-  </script>
 
-  <div class="max-w-7xl mx-auto w-full p-4 mt-4 grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <div class="max-w-6xl mx-auto px-4 pb-10">
+    <header class="bg-blue-800 text-white p-4 rounded-t-xl flex items-center gap-3">
+      <span class="text-2xl">🛑</span>
+      <h1 class="text-xl font-bold">BRAKING PERFORMANCE CALCULATOR (EN 15746-2)</h1>
+    </header>
 
-    <div class="lg:col-span-4 space-y-4">
+    <div class="bg-white p-6 rounded-b-xl shadow-lg border border-gray-200">
       
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-gray-600">
-          <h2 class="font-bold text-gray-700 mb-2">1. Vehicle Data</h2>
-          <div class="grid grid-cols-2 gap-2 text-sm">
-            <div><label>Mass (kg)</label><input type="number" id="mass_kg" value="20000" class="w-full p-2 border rounded"></div>
-            <div><label>Reaction(s)</label><input type="number" id="reaction_time" value="1.0" class="w-full p-2 border rounded"></div>
-            <div><label>Wheels</label><input type="number" id="num_wheels" value="4" class="w-full p-2 border rounded"></div>
-          </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+        <div><label class="text-xs font-bold text-gray-500">Doc No</label><input id="doc_no" value="DOC-001" class="w-full border p-1 rounded"></div>
+        <div><label class="text-xs font-bold text-gray-500">Made By</label><input id="made_by" value="Engineer" class="w-full border p-1 rounded"></div>
+        <div><label class="text-xs font-bold text-gray-500">Checked By</label><input id="checked_by" value="Manager" class="w-full border p-1 rounded"></div>
+        <div><label class="text-xs font-bold text-gray-500">Approved By</label><input id="approved_by" value="Director" class="w-full border p-1 rounded"></div>
       </div>
 
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-purple-600">
-          <h2 class="font-bold text-gray-700 mb-2">2. Mode</h2>
-          <div class="flex gap-4 text-sm">
-              <label><input type="radio" name="calc_mode" value="Rail Only" checked onchange="toggleMode()"> Rail Only</label>
-              <label><input type="radio" name="calc_mode" value="Rail+Road" onchange="toggleMode()"> Rail + Road</label>
-          </div>
-      </div>
-
-      <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-600">
-          <h2 class="font-bold text-gray-700 mb-2">3. Rail Parameters</h2>
-          <div class="space-y-2 text-sm">
-              <div>
-                  <label>Speeds (km/h) <span class="text-xs text-gray-400">(e.g. 10, 20, 30)</span></label>
-                  <input type="text" id="rail_speed" value="10, 20, 30, 40" class="w-full p-2 border rounded">
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                  <div>
-                      <label>Gradients</label>
-                      <input type="text" id="rail_gradient" value="40" class="w-full p-2 border rounded">
-                  </div>
-                  <div><label>Unit</label>
-                      <select id="rail_gradient_type" class="w-full p-2 border rounded bg-gray-50">
-                          <option>1 in G</option><option>Percentage (%)</option><option>Degree (°)</option>
-                      </select>
-                  </div>
-              </div>
-          </div>
-      </div>
-
-      <div id="road_box" class="hidden bg-white p-4 rounded-xl shadow border-l-4 border-orange-500">
-          <h2 class="font-bold text-gray-700 mb-2">4. Road Parameters</h2>
-          <div class="space-y-2 text-sm">
-              <div>
-                  <label>Speeds <span class="text-xs text-gray-400">(comma sep)</span></label>
-                  <input type="text" id="road_speed" value="10, 30" class="w-full p-2 border rounded">
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                  <div><label>Gradients</label><input type="text" id="road_gradient" value="5" class="w-full p-2 border rounded"></div>
-                  <div><label>Unit</label>
-                      <select id="road_gradient_type" class="w-full p-2 border rounded bg-gray-50">
-                          <option>Percentage (%)</option><option>Degree (°)</option><option>1 in G</option>
-                      </select>
-                  </div>
-              </div>
-              <div><label>Friction (µ)</label><input type="number" id="mu" value="0.7" step="0.1" class="w-full p-2 border rounded"></div>
-          </div>
-      </div>
-
-      <button onclick="calculate()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded shadow">CALCULATE</button>
-      <button onclick="downloadPDF()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded shadow flex justify-center items-center gap-2">
-          DOWNLOAD REPORT <span id="spin" class="hidden animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></span>
-      </button>
-      
-      <div class="bg-gray-50 p-2 rounded text-xs text-gray-400 space-y-1">
-          <input id="doc_no" placeholder="Doc No" class="w-full p-1 border">
-          <div class="grid grid-cols-3 gap-1">
-              <input id="made_by" placeholder="Made By" class="p-1 border">
-              <input id="checked_by" placeholder="Checked" class="p-1 border">
-              <input id="approved_by" placeholder="Approved" class="p-1 border">
-          </div>
-      </div>
-    </div>
-
-    <div class="lg:col-span-8">
-        <div class="bg-white rounded-xl shadow h-full flex flex-col">
-            <div class="bg-slate-800 text-white p-4 font-bold flex justify-between">
-                <span>Calculation Results</span>
-                <span class="text-xs font-normal text-gray-400">DIN EN 15746-2</span>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <div class="space-y-6">
+          
+          <section class="border rounded-lg p-4 relative">
+            <h2 class="absolute -top-3 left-4 bg-white px-2 text-blue-800 font-bold text-sm">1. Vehicle Data</h2>
+            <div class="grid grid-cols-2 gap-4 mt-2">
+              <label class="block text-sm font-medium text-gray-700">GVW (kg)
+                <input type="number" id="mass_kg" value="18000" class="w-full border p-2 rounded mt-1">
+              </label>
+              <label class="block text-sm font-medium text-gray-700">Max Speed (km/h)
+                <input type="number" id="speed_kmh" value="40" class="w-full border p-2 rounded mt-1">
+              </label>
+              <label class="block text-sm font-medium text-gray-700">Total Wheels
+                <input type="number" id="number_of_wheels" value="4" class="w-full border p-2 rounded mt-1">
+              </label>
+              <label class="block text-sm font-medium text-gray-700">Wheel Dia (mm)
+                <input type="number" id="wheel_dia" value="850" class="w-full border p-2 rounded mt-1">
+              </label>
             </div>
-            
-            <div class="overflow-auto flex-grow max-h-[700px]">
-                <table class="w-full text-sm text-left text-gray-600">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 border-b sticky top-0">
-                        <tr>
-                            <th class="px-4 py-3">Mode</th>
-                            <th class="px-4 py-3">Scenario</th>
-                            <th class="px-4 py-3">Speed</th>
-                            <th class="px-4 py-3">Grad</th>
-                            <th class="px-4 py-3">Net Force</th>
-                            <th class="px-4 py-3">Decel</th>
-                            <th class="px-4 py-3">Dist</th>
-                            <th class="px-4 py-3">Total</th>
-                            <th class="px-4 py-3">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="results_body">
-                        <tr><td colspan="9" class="p-8 text-center text-gray-400">Enter parameters (comma separated for multiple) and click Calculate</td></tr>
-                    </tbody>
-                </table>
+          </section>
+
+          <section class="border rounded-lg p-4 relative">
+            <h2 class="absolute -top-3 left-4 bg-white px-2 text-blue-800 font-bold text-sm">2. Track Data</h2>
+            <div class="space-y-3 mt-2">
+              <div class="grid grid-cols-2 gap-2">
+                 <label class="block text-sm font-medium text-gray-700">Gradient Input
+                    <input type="number" id="gradient_input" value="40" class="w-full border p-2 rounded mt-1">
+                 </label>
+                 <label class="block text-sm font-medium text-gray-700">Unit
+                    <select id="gradient_type" class="w-full border p-2 rounded mt-1 bg-white">
+                        <option value="1 in G">1 in G</option>
+                        <option value="Degree (°)">Degree (°)</option>
+                        <option value="Percentage (%)">Percentage (%)</option>
+                    </select>
+                 </label>
+              </div>
             </div>
+          </section>
+
+          <section class="border rounded-lg p-4 relative">
+            <h2 class="absolute -top-3 left-4 bg-white px-2 text-blue-800 font-bold text-sm">3. Calculation Settings</h2>
+            <div class="space-y-3 mt-2">
+                <div class="flex items-center gap-4">
+                    <span class="text-sm font-medium">Distance Source:</span>
+                    <label class="inline-flex items-center"><input type="radio" name="dist_src" value="EN Standard" checked class="form-radio"> <span class="ml-1 text-sm">EN Standard</span></label>
+                    <label class="inline-flex items-center"><input type="radio" name="dist_src" value="Custom" class="form-radio"> <span class="ml-1 text-sm">Custom</span></label>
+                </div>
+                <div id="custom_dist_div" class="hidden">
+                     <label class="block text-sm font-medium text-gray-700">Custom Stop Distance (m)
+                        <input type="number" id="custom_distance" class="w-full border p-2 rounded mt-1">
+                     </label>
+                </div>
+            </div>
+          </section>
+
+          <div class="flex gap-4">
+              <button onclick="calculate()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded shadow transition">CALCULATE</button>
+              <button onclick="downloadReport()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded shadow transition">DOWNLOAD PDF</button>
+          </div>
         </div>
-    </div>
 
+        <div class="space-y-6">
+            <section class="border-2 border-blue-100 bg-blue-50 rounded-lg p-4 h-full">
+                <h2 class="text-lg font-bold text-blue-900 mb-4">Calculation Results</h2>
+                <div id="results_area" class="space-y-4 text-sm">
+                    <p class="text-gray-500 italic">Click 'Calculate' to see results.</p>
+                </div>
+            </section>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
-    function toggleMode() {
-        const mode = document.querySelector('input[name="calc_mode"]:checked').value;
-        const box = document.getElementById('road_box');
-        if(mode === 'Rail+Road') box.classList.remove('hidden');
-        else box.classList.add('hidden');
-    }
+    document.querySelectorAll('input[name="dist_src"]').forEach(elem => {
+        elem.addEventListener("change", function(event) {
+            const customDiv = document.getElementById("custom_dist_div");
+            if (event.target.value === "Custom") {
+                customDiv.classList.remove("hidden");
+            } else {
+                customDiv.classList.add("hidden");
+            }
+        });
+    });
 
-    function collect() {
+    function collectData() {
         return {
-            calc_mode: document.querySelector('input[name="calc_mode"]:checked').value,
-            mass_kg: parseFloat(document.getElementById('mass_kg').value)||0,
-            reaction_time: parseFloat(document.getElementById('reaction_time').value)||0,
-            num_wheels: parseInt(document.getElementById('num_wheels').value)||0,
-            
-            // Send as Strings now
-            rail_speed_input: document.getElementById('rail_speed').value,
-            rail_gradient_input: document.getElementById('rail_gradient').value,
-            rail_gradient_type: document.getElementById('rail_gradient_type').value,
-            road_speed_input: document.getElementById('road_speed').value,
-            road_gradient_input: document.getElementById('road_gradient').value,
-            
-            road_gradient_type: document.getElementById('road_gradient_type').value,
-            mu: parseFloat(document.getElementById('mu').value)||0,
             doc_no: document.getElementById('doc_no').value,
             made_by: document.getElementById('made_by').value,
             checked_by: document.getElementById('checked_by').value,
-            approved_by: document.getElementById('approved_by').value
+            approved_by: document.getElementById('approved_by').value,
+            mass_kg: parseFloat(document.getElementById('mass_kg').value),
+            speed_kmh: parseFloat(document.getElementById('speed_kmh').value),
+            number_of_wheels: parseInt(document.getElementById('number_of_wheels').value),
+            wheel_dia: parseFloat(document.getElementById('wheel_dia').value),
+            gradient_input: parseFloat(document.getElementById('gradient_input').value),
+            gradient_type: document.getElementById('gradient_type').value,
+            distance_source: document.querySelector('input[name="dist_src"]:checked').value,
+            custom_distance: parseFloat(document.getElementById('custom_distance').value) || 0
         };
     }
 
     async function calculate() {
-        const tbody = document.getElementById('results_body');
-        tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center">Calculating...</td></tr>';
-        
-        try {
-            const res = await fetch('/braking_calculate', {
-                method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(collect())
-            });
-            const data = await res.json();
-            
-            let html = '';
-            data.rows.forEach((row, i) => {
-                const bg = i%2===0 ? 'bg-white' : 'bg-gray-50';
-                const statusColor = row.status.includes('✓') ? 'text-green-600 bg-green-100' : (row.status === 'N/A' ? 'text-gray-500' : 'text-red-600 bg-red-100');
-                
-                html += `
-                <tr class="border-b ${bg} hover:bg-blue-50 transition">
-                    <td class="px-4 py-3 font-bold ${row.mode==='Rail'?'text-blue-800':'text-orange-600'}">${row.mode}</td>
-                    <td class="px-4 py-3 font-medium text-gray-900">${row.scenario}</td>
-                    <td class="px-4 py-3">${row.speed}</td>
-                    <td class="px-4 py-3">${row.gradient}</td>
-                    <td class="px-4 py-3 font-mono text-blue-700">${row.net_force}</td>
-                    <td class="px-4 py-3 font-mono">${row.decel}</td>
-                    <td class="px-4 py-3 font-bold">${row.dist}</td>
-                    <td class="px-4 py-3 font-bold text-blue-900">${row.total}</td>
-                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-bold ${statusColor}">${row.status}</span></td>
-                </tr>`;
-            });
-            tbody.innerHTML = html;
-        } catch(e) {
-            tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-red-600">Error: ${e.message}</td></tr>`;
-        }
-    }
+        const data = collectData();
+        const resArea = document.getElementById('results_area');
+        resArea.innerHTML = "Calculating...";
 
-    async function downloadPDF() {
-        const spinner = document.getElementById('spin');
-        spinner.classList.remove('hidden');
-        
         try {
-            const data = collect();
-            console.log('Sending data:', data);
-            
-            const res = await fetch('/download_braking_report', {
+            const response = await fetch('/calculate_braking', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
-            
-            console.log('Response status:', res.status);
-            
-            if(!res.ok) {
-                const errorText = await res.text();
-                console.error('Server error:', errorText);
-                throw new Error(`Server error (${res.status}): ${errorText}`);
+
+            if (!response.ok) throw new Error(await response.text());
+            const result = await response.json();
+
+            let html = `
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <p class="text-gray-500">Max Braking Force</p>
+                        <p class="text-xl font-bold text-blue-800">${result.f_b} N</p>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <p class="text-gray-500">Gradient Angle</p>
+                        <p class="text-xl font-bold text-blue-800">${result.angle_deg}°</p>
+                    </div>
+                </div>
+                <h3 class="font-bold mb-2 border-b">Scenarios at Max Speed</h3>
+            `;
+
+            const scenarios = [
+                {key: 'flat', label: 'Flat Track'},
+                {key: 'up', label: 'Moving Up (+Grade)'},
+                {key: 'down', label: 'Moving Down (-Grade)'}
+            ];
+
+            scenarios.forEach(scen => {
+                const r = result.scenarios[scen.key];
+                let complianceClass = r.compliance.includes("✓") ? "text-green-600" : "text-red-600";
+                
+                html += `
+                    <div class="mb-3 bg-white p-3 rounded border">
+                        <h4 class="font-bold text-gray-700">${scen.label}</h4>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 text-xs">
+                            <span>Net Force: <b>${r.f_net} N</b></span>
+                            <span>Decel: <b>${r.decel} m/s²</b></span>
+                            <span>Braking Dist: <b>${r.dist} m</b></span>
+                            <span>Total Stop: <b>${r.total} m</b></span>
+                        </div>
+                        <p class="mt-2 font-bold ${complianceClass}">${r.compliance}</p>
+                    </div>
+                `;
+            });
+            resArea.innerHTML = html;
+        } catch (err) {
+            resArea.innerHTML = `<p class="text-red-600 font-bold">Error: ${err.message}</p>`;
+        }
+    }
+
+    async function downloadReport() {
+        const data = collectData();
+        const btn = event.target;
+        const originalText = btn.innerText;
+        btn.innerText = "GENERATING...";
+        btn.disabled = true;
+
+        try {
+            const response = await fetch('/download_braking_report', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "Braking_Report.pdf";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } else {
+                const err = await response.json();
+                alert("Error generating PDF: " + (err.detail || "Unknown error"));
             }
-            
-            const blob = await res.blob();
-            console.log('Blob received, size:', blob.size);
-            
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = "Braking_Performance_Report.pdf";
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-            
-            alert('✅ PDF Downloaded Successfully!');
-            
-        } catch(e) {
-            console.error('Download error:', e);
-            alert('❌ Error downloading PDF:\n' + e.message);
+        } catch (error) {
+            alert("Network error: " + error);
         } finally {
-            spinner.classList.add('hidden');
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     }
   </script>
-
-  <footer class="bg-gray-800 text-white mt-auto py-6">
-    <div class="max-w-7xl mx-auto px-4">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
-        <div>
-          <h3 class="font-bold text-lg mb-2">Premnath Engineering Works</h3>
-          <p class="text-gray-400 text-sm">Leading manufacturer of railway vehicles and components with precision engineering solutions.</p>
-        </div>
-        <div>
-          <h3 class="font-bold text-lg mb-2">Quick Links</h3>
-          <ul class="text-gray-400 text-sm space-y-1">
-            <li><a href="/" class="hover:text-blue-400">Home</a></li>
-            <li><a href="/braking" class="hover:text-blue-400">Braking Calculator</a></li>
-            <li><a href="/tractive_effort" class="hover:text-blue-400">Tractive Effort</a></li>
-            <li><a href="/qmax" class="hover:text-blue-400">Qmax Calculator</a></li>
-          </ul>
-        </div>
-        <div>
-          <h3 class="font-bold text-lg mb-2">Contact</h3>
-          <p class="text-gray-400 text-sm">DIN EN 15746-2:2021-05 Compliant</p>
-          <p class="text-gray-400 text-sm mt-2">© 2025 Premnath Engineering Works. All rights reserved.</p>
-        </div>
-      </div>
-      <div class="border-t border-gray-700 pt-4 text-center text-gray-400 text-xs">
-        Railway Vehicle Braking Performance Calculator | Standards: EN 15746-2:2020(E)
-      </div>
-    </div>
-  </footer>
-
 </body>
 </html>

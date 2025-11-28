@@ -1,93 +1,131 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - Premnath Engineering</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-100 flex items-center justify-center h-screen">
-
-  <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border-t-4 border-blue-800">
-    <div class="text-center mb-8">
-        <img src="/logo.png" alt="Premnath Logo" class="h-12 mx-auto mb-2">
-        <h1 class="text-2xl font-bold text-slate-800 uppercase tracking-wide">Premnath</h1>
-        <p class="text-xs text-gray-500 tracking-widest uppercase">Engineering Works</p>
-    </div>
-    
-    <h2 class="text-xl font-semibold mb-6 text-center text-gray-700">System Login</h2>
-    
-    <form id="loginForm">
-      <div class="mb-4">
-        <label class="block text-gray-600 text-sm font-bold mb-2">Email Address</label>
-        <input type="email" id="email" class="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-blue-800 focus:ring-1 focus:ring-blue-800 transition" placeholder="Enter your email" required>
-      </div>
-      <div class="mb-8">
-        <label class="block text-gray-600 text-sm font-bold mb-2">Password</label>
-        <input type="password" id="password" class="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-blue-800 focus:ring-1 focus:ring-blue-800 transition" placeholder="Enter password" required>
-      </div>
-      <button type="submit" class="w-full bg-blue-800 text-white font-bold py-3 rounded hover:bg-blue-900 transition shadow-md">
-        Secure Login
-      </button>
-    </form>
-    
-    <div class="mt-6 text-center text-sm text-gray-500">
-        <p>Need access?</p>
-        <a href="/signup" class="text-green-600 font-bold hover:underline mt-1 inline-block">Register New Account</a>
-    </div>
-    <div class="mt-4 text-center">
-        <a href="/" class="text-xs text-gray-400 hover:text-gray-600">← Back to Home</a>
-    </div>
-  </div>
-
-  <script>
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      const btn = e.target.querySelector('button');
-
-      // Button loading state
-      const originalText = btn.innerText;
-      btn.innerText = "Verifying Credentials...";
-      btn.disabled = true;
-      btn.classList.add('opacity-75');
-
-      try {
-        const res = await fetch('/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-
-        const data = await res.json();
-        
-        if (res.ok) {
-            // Save credentials locally for the session
-            localStorage.setItem("token", "true"); // Session flag
-            localStorage.setItem("user_id", data.user_id);
-            localStorage.setItem("email", data.email);
-            localStorage.setItem("is_license_active", data.is_license_active);
-            
-            // Redirect based on license status
-            if(data.is_license_active) {
-                window.location.href = "/"; // Go Home
-            } else {
-                window.location.href = "/profile"; // Go Activate License
-            }
-        } else {
-            alert("❌ Login Failed: " + (data.detail || "Invalid credentials"));
-            btn.innerText = originalText;
-            btn.disabled = false;
-            btn.classList.remove('opacity-75');
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Premnath Engineering</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
         }
-      } catch (err) {
-          alert("Server Error. Check internet connection.");
-          btn.innerText = originalText;
-          btn.disabled = false;
-          btn.classList.remove('opacity-75');
-      }
-    });
-  </script>
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center items-center h-screen">
+    <!-- Key Notification (shown when user has key) -->
+    <div id="keyNotification" class="hidden notification">
+        🎉 Congratulations! You have an activation key: <strong id="keyValue"></strong>
+    </div>
+
+    <div class="bg-white p-8 rounded-xl shadow-lg w-96">
+        <div class="text-center mb-6">
+            <img src="/logo.png" alt="Logo" class="h-12 mx-auto mb-2">
+            <h2 class="text-2xl font-bold text-blue-900">Login</h2>
+        </div>
+        <input type="text" id="username" placeholder="Username" class="w-full p-3 mb-4 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="password" id="password" placeholder="Password" class="w-full p-3 mb-6 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="handleLogin()" class="w-full bg-blue-700 text-white py-3 rounded font-bold hover:bg-blue-800 transition">Login</button>
+        <p class="mt-4 text-center text-sm text-gray-600">No account? <a href="/signup" class="text-blue-600 hover:underline">Sign up</a></p>
+        <p id="msg" class="mt-4 text-center text-red-500 text-sm font-semibold"></p>
+    </div>
+
+    <script>
+        async function handleLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const msg = document.getElementById('msg');
+            const btn = document.querySelector("button");
+
+            if(!username || !password) {
+                msg.innerText = "Please fill in all fields.";
+                return;
+            }
+
+            btn.innerText = "Logging in...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    // Store authentication data
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('user_id', data.user_id);
+                    localStorage.setItem('username', data.username);
+                    localStorage.setItem('is_admin', data.is_admin);
+                    
+                    // Store activation key info
+                    if (data.has_activation_key && data.activation_key) {
+                        localStorage.setItem('activation_key', data.activation_key);
+                        localStorage.setItem('has_key', 'true');
+                    } else {
+                        localStorage.removeItem('activation_key');
+                        localStorage.setItem('has_key', 'false');
+                    }
+                    
+                    // Redirect based on role
+                    if (data.is_admin) {
+                        window.location.href = '/admin';
+                    } else {
+                        // Show key notification if user has key
+                        if (data.has_activation_key) {
+                            showKeyNotification(data.activation_key);
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 2000);
+                        } else {
+                            window.location.href = '/';
+                        }
+                    }
+                } else {
+                    msg.innerText = data.detail || "Login failed";
+                    btn.innerText = "Login";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                msg.innerText = "Server Error: " + err.message;
+                btn.innerText = "Login";
+                btn.disabled = false;
+            }
+        }
+
+        function showKeyNotification(key) {
+            const notification = document.getElementById('keyNotification');
+            const keyValue = document.getElementById('keyValue');
+            keyValue.textContent = key;
+            notification.classList.remove('hidden');
+        }
+
+        // Check if already logged in
+        window.onload = function() {
+            const token = localStorage.getItem('access_token');
+            if (token) {
+                const isAdmin = localStorage.getItem('is_admin') === 'true';
+                if (isAdmin) {
+                    window.location.href = '/admin';
+                } else {
+                    window.location.href = '/';
+                }
+            }
+        };
+    </script>
 </body>
 </html>
