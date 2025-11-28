@@ -17,6 +17,7 @@ RUN apt-get update \
        texlive-fonts-recommended \
        texlive-science \
        texlive-pictures \
+       curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -36,7 +37,9 @@ RUN addgroup --system appgroup \
 
 USER appuser
 
-EXPOSE 8000
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Use gunicorn with uvicorn workers for production
-CMD ["gunicorn", "main:app", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+# Use uvicorn for Render deployment with PORT environment variable
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]

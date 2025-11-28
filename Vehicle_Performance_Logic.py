@@ -310,6 +310,127 @@ class VehiclePerformanceCalculator:
             })
         return table_data
         
+    def calculate_detailed_step_by_step(self) -> dict:
+        """
+        Calculate detailed step-by-step calculations with formulas and intermediate results.
+        Returns a dictionary with all calculation steps for documentation.
+        """
+        # Sample calculation at 10 km/h (or minimum speed)
+        calc_speed_kmh = 10.0
+        
+        # Rolling Resistance Calculation
+        A = 0.647 + (13.17 / (self.loco_gvw_ton / self.num_axles))
+        B = 0.00933
+        C = 0.057 / self.loco_gvw_ton
+        rolling_res = rolling_resistance_loco(calc_speed_kmh, self.loco_gvw_ton, self.num_axles)
+        
+        # Gradient Resistance
+        gradient_res = gradient_resistance(self.loco_gvw_ton, 0.0)  # At 0% slope
+        
+        # Curve Resistance
+        curve_res = curvature_resistance(self.loco_gvw_ton, self.max_curve_deg)
+        
+        # Starting Resistance
+        starting_res = starting_resistance_loco(self.loco_gvw_ton)
+        
+        # Total Locomotive Resistance
+        total_loco_resistance = rolling_res + gradient_res + curve_res + starting_res
+        
+        # Max Tractive Effort (Generated)
+        max_torque = max(self.torque_curve.values()) if self.torque_curve else 0
+        max_gear_ratio = max(self.gear_ratios) if self.gear_ratios else 1
+        wheel_radius = self.wheel_dia_m / 2
+        max_te_generated = (max_torque * max_gear_ratio * self.rear_axle_ratio) / wheel_radius
+        
+        # Adhesion Limit
+        adhesion_limit = self.loco_gvw_kg * 9.81 * self.friction_mu
+        
+        # Final Usable Tractive Effort
+        final_te = min(max_te_generated, adhesion_limit)
+        
+        # Net Tractive Effort
+        net_te = final_te - total_loco_resistance
+        
+        # Wagon resistance per ton (at calc speed)
+        wagon_res_per_ton = rolling_resistance_wagon(calc_speed_kmh, 1.0) + starting_resistance_wagon(1.0)
+        
+        # Shunting Capability
+        shunting_capability = net_te / wagon_res_per_ton if wagon_res_per_ton > 0 else 0
+        
+        # Calculate max achievable speed with shunting load
+        max_speed_with_load = 0.0
+        if self.shunting_load_t > 0:
+            for test_speed in range(1, 51):  # Test speeds from 1 to 50 km/h
+                test_loco_res = (rolling_resistance_loco(test_speed, self.loco_gvw_ton, self.num_axles) +
+                               gradient_res + curve_res)
+                test_wagon_res = rolling_resistance_wagon(test_speed, self.shunting_load_t)
+                test_total_res = test_loco_res + test_wagon_res
+                
+                if final_te >= test_total_res:
+                    max_speed_with_load = float(test_speed)
+        
+        return {
+            "calculation_speed": calc_speed_kmh,
+            "rolling_resistance": {
+                "formula": "RR (N) = (A + B×v + C×v²) × W_ton × g",
+                "A": round(A, 3),
+                "B": B,
+                "C": round(C, 5),
+                "calculation": f"RR = ({A:.3f} + {B}×{calc_speed_kmh} + {C:.5f}×{calc_speed_kmh}²) × {self.loco_gvw_ton} × 9.81",
+                "result": round(rolling_res, 2)
+            },
+            "gradient_resistance": {
+                "formula": "GR (N) = Loco GVW (kg) * g * (Slope / 100)",
+                "calculation": f"GR = {self.loco_gvw_kg} × 9.81 × (0.0 ÷ 100)",
+                "result": round(gradient_res, 2)
+            },
+            "curve_resistance": {
+                "formula": "CR (N) = 0.4 × W_ton × Curve (deg) × g",
+                "calculation": f"CR = 0.4 × {self.loco_gvw_ton} × {self.max_curve_deg} × 9.81",
+                "result": round(curve_res, 2)
+            },
+            "starting_resistance": {
+                "formula": "SR (N) = 6.0 × W_ton × g",
+                "calculation": f"SR = 6.0 × {self.loco_gvw_ton} × 9.81",
+                "result": round(starting_res, 2)
+            },
+            "total_loco_resistance": {
+                "formula": "Total Resistance = RR + GR + CR + Starting Resistance",
+                "calculation": f"TR = {rolling_res:.2f} + {gradient_res:.2f} + {curve_res:.2f} + {starting_res:.2f}",
+                "result": round(total_loco_resistance, 2)
+            },
+            "max_tractive_effort": {
+                "formula": "TE_max (N) = (Peak Torque × Max Gear Ratio × Axle Ratio) ÷ Wheel Radius",
+                "calculation": f"TE = ({max_torque} × {max_gear_ratio} × {self.rear_axle_ratio}) ÷ {wheel_radius:.3f}",
+                "result": round(max_te_generated, 2)
+            },
+            "adhesion_limit": {
+                "formula": "Adhesion (N) = Loco GVW (kg) × g × Friction (μ)",
+                "calculation": f"Adhesion = {self.loco_gvw_kg} × 9.81 × {self.friction_mu}",
+                "result": round(adhesion_limit, 2)
+            },
+            "final_usable_te": {
+                "formula": "Final TE = min(Generated TE, Adhesion Limit)",
+                "calculation": f"Final TE = min({max_te_generated:.2f}, {adhesion_limit:.2f})",
+                "result": round(final_te, 2)
+            },
+            "net_tractive_effort": {
+                "formula": "Net TE = Final TE - Total Resistance",
+                "calculation": f"Net TE = {final_te:.2f} − {total_loco_resistance:.2f}",
+                "result": round(net_te, 2)
+            },
+            "shunting_capability": {
+                "formula": "Shuntable Tons = Net TE ÷ Wagon Resistance per Ton",
+                "calculation": f"Tons = {net_te:.2f} ÷ {wagon_res_per_ton:.2f}",
+                "result": round(shunting_capability, 2)
+            },
+            "max_achievable_speed": {
+                "formula": "Highest speed where Tractive Effort ≥ Total Resistance",
+                "load_tons": self.shunting_load_t,
+                "result": round(max_speed_with_load, 2)
+            }
+        }
+
     def create_report_docx(self):
         """
         Creates a .docx report and returns it as an in-memory stream.
@@ -365,6 +486,86 @@ class VehiclePerformanceCalculator:
             row_cells[1].text = str(torque)
 
         doc.add_heading("Calculation Results", level=2)
+        
+        # Add detailed step-by-step calculations
+        detailed_calcs = self.calculate_detailed_step_by_step()
+        
+        doc.add_heading("Functions Used & Step-by-Step Calculations", level=2)
+        
+        # Rolling Resistance Section
+        doc.add_heading(f"Rolling Resistance (at {detailed_calcs['calculation_speed']} km/h)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['rolling_resistance']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['rolling_resistance']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['rolling_resistance']['result']} N")
+        
+        # Gradient Resistance Section  
+        doc.add_heading("Gradient Resistance", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['gradient_resistance']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['gradient_resistance']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['gradient_resistance']['result']} N")
+        
+        # Curve Resistance Section
+        doc.add_heading("Curve Resistance", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['curve_resistance']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['curve_resistance']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['curve_resistance']['result']} N")
+        
+        # Starting Resistance Section
+        doc.add_heading("Starting Resistance", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['starting_resistance']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['starting_resistance']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['starting_resistance']['result']} N")
+        
+        # Total Loco Resistance Section
+        doc.add_heading(f"Total Loco Resistance (at {detailed_calcs['calculation_speed']} km/h)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['total_loco_resistance']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['total_loco_resistance']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['total_loco_resistance']['result']} N")
+        
+        # Max Tractive Effort Section
+        doc.add_heading("Max Tractive Effort (Generated)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['max_tractive_effort']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['max_tractive_effort']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['max_tractive_effort']['result']} N")
+        
+        # Adhesion Limit Section
+        doc.add_heading("Adhesion Limit (Anti-Slip)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['adhesion_limit']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['adhesion_limit']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['adhesion_limit']['result']} N")
+        
+        # Final Usable TE Section
+        doc.add_heading("Final Usable Tractive Effort", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['final_usable_te']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['final_usable_te']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['final_usable_te']['result']} N")
+        
+        # Net TE Section
+        doc.add_heading(f"Net Tractive Effort (at {detailed_calcs['calculation_speed']} km/h)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['net_tractive_effort']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['net_tractive_effort']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['net_tractive_effort']['result']} N")
+        
+        # Shunting Capability Section
+        doc.add_heading(f"Shunting Capability (at {detailed_calcs['calculation_speed']} km/h)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['shunting_capability']['formula']}")
+        doc.add_paragraph(f"Calculation: {detailed_calcs['shunting_capability']['calculation']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['shunting_capability']['result']} Tons")
+        
+        # Max Achievable Speed Section
+        doc.add_heading(f"Max Achievable Speed (with {detailed_calcs['max_achievable_speed']['load_tons']}t load)", level=3)
+        doc.add_paragraph(f"Formula: {detailed_calcs['max_achievable_speed']['formula']}")
+        doc.add_paragraph(f"Result = {detailed_calcs['max_achievable_speed']['result']} km/h")
+        
+        # Final Outputs Summary
+        doc.add_heading("Final Outputs", level=2)
+        doc.add_paragraph(f"Max Generated Tractive Effort: {detailed_calcs['max_tractive_effort']['result']} N")
+        doc.add_paragraph(f"Adhesion Limit (Anti-Slip): {detailed_calcs['adhesion_limit']['result']} N")
+        doc.add_paragraph(f"Final Usable Tractive Effort: {detailed_calcs['final_usable_te']['result']} N")
+        doc.add_paragraph(f"Total Loco Resistance (at {detailed_calcs['calculation_speed']} km/h): {detailed_calcs['total_loco_resistance']['result']} N")
+        doc.add_paragraph(f"Net Tractive Effort (at {detailed_calcs['calculation_speed']} km/h): {detailed_calcs['net_tractive_effort']['result']} N")
+        doc.add_paragraph(f"Estimated Shunting Capability (at {detailed_calcs['calculation_speed']} km/h): {detailed_calcs['shunting_capability']['result']} Tons")
+        doc.add_paragraph(f"Max Achievable Speed (with load): {detailed_calcs['max_achievable_speed']['result']} km/h")
         
         # Traction Snapshot
         traction_results = self.run_tractive_calculation()

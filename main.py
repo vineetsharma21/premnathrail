@@ -38,7 +38,45 @@ from Vehicle_Performance_Logic import VehiclePerformanceCalculator
 from BrakingWebLogic import BrakingCalculator
 
 # --- Setup ---
-models.Base.metadata.create_all(bind=engine)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    print("FastAPI application starting up...")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Files in directory: {os.listdir('.')}")
+    yield
+    # Shutdown (if needed)
+
+app = FastAPI(
+    title="Engineering Calculator API",
+    description="Advanced calculations for Hydraulic, Qmax, Load Distribution, Tractive Effort, Vehicle Performance and Braking Analysis",
+    version="1.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"], 
+)
+
+# Initialize database tables
+try:
+    models.Base.metadata.create_all(bind=engine)
+    print("Database tables created successfully")
+except Exception as e:
+    print(f"Database initialization warning: {e}")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="."), name="static")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Engineering Calculator API is running"}
 
 # --- NEW SECURITY SETUP (Using bcrypt directly) ---
 def get_password_hash(password):
@@ -56,14 +94,6 @@ def verify_password(plain_password, hashed_password):
         return bcrypt.checkpw(pwd_bytes, hash_bytes)
     except Exception:
         return False
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"], 
-)
-app.mount("/static", StaticFiles(directory="."), name="static")
 
 # --- Calculators ---
 hydraulic_calculator = HydraulicCalculator()
@@ -483,7 +513,24 @@ async def handle_performance(raw_input: VehiclePerformanceRawInput):
         results = calculator.run_tractive_calculation()
         plot_data = calculator.calculate_plot_data()
         table = calculator.calculate_speed_for_shunting_load()
-        return {"traction_snapshot": results, "tractive_effort_graph": plot_data["tractive_effort_plot"], "shunting_capability_graph": plot_data["shunting_capability_plot"], "speed_vs_slope_table": table}
+        detailed_calcs = calculator.calculate_detailed_step_by_step()
+        return {
+            "traction_snapshot": results, 
+            "tractive_effort_graph": plot_data["tractive_effort_plot"], 
+            "shunting_capability_graph": plot_data["shunting_capability_plot"], 
+            "speed_vs_slope_table": table,
+            "detailed_calculations": detailed_calcs
+        }
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/calculate_performance_detailed")
+async def handle_performance_detailed(raw_input: VehiclePerformanceRawInput):
+    """Return only the detailed step-by-step calculations for documentation purposes."""
+    try:
+        inputs, _ = process_and_validate_vehicle_performance_inputs(raw_input)
+        calculator = VehiclePerformanceCalculator(inputs)
+        detailed_calcs = calculator.calculate_detailed_step_by_step()
+        return {"detailed_calculations": detailed_calcs}
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/download_performance_report")
@@ -625,5 +672,6 @@ async def download_braking_pdf(raw_input: BrakingWebInput):
 
 if __name__ == "__main__":
     import uvicorn
-    print("FastAPI server is running on http://127.0.0.1:8000")
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    print(f"FastAPI server is running on port {port}")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
