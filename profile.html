@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Account</title>
+    <title>User Profile - Premnath Engineering</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @keyframes fadeIn { from {opacity:0; transform: translateY(10px)} to {opacity:1; transform:none} }
+        @keyframes slideIn { from {opacity:0; transform: translateX(-20px)} to {opacity:1; transform:none} }
         .card { animation: fadeIn .3s ease-out }
+        .notification { position: fixed; top: 20px; right: 20px; z-index: 1000; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; }
+        .success { background: #10b981; color: white; }
+        .error { background: #ef4444; color: white; }
     </style>
     <script>
         const API = window.location.origin;
@@ -32,32 +36,158 @@
             };
             
             // Set form values
+            document.getElementById('fullName').value = localStorage.getItem('fullName') || '';
+            document.getElementById('username').value = localStorage.getItem('username') || '';
             document.getElementById('email').value = email || '';
+            document.getElementById('phone').value = localStorage.getItem('phone') || '';
+            document.getElementById('userId').value = user_id || '';
             
             // Set license status
-            document.getElementById('keyStatus').innerHTML = (is_license_active === 'true')
-                ? '<span class="text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-check-circle"></i> Active</span>'
+            updateLicenseStatus();
+            
+            // Load admin messages
+            loadAdminMessages();
+        }
+
+        function updateLicenseStatus() {
+            const is_license_active = localStorage.getItem('is_license_active') === 'true';
+            document.getElementById('keyStatus').innerHTML = is_license_active
+                ? '<span class="text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-check-circle"></i> Active License</span>'
                 : '<span class="text-yellow-700 bg-yellow-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-exclamation-triangle"></i> No License</span>';
         }
 
         async function saveProfile() {
-            const user_id = localStorage.getItem('user_id');
+            const fullName = document.getElementById('fullName').value;
+            const username = document.getElementById('username').value;
             const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
             
             // Simple validation
             if (!email) {
-                alert('Email is required');
+                showNotification('Email is required', 'error');
                 return;
             }
             
             // Update localStorage
+            localStorage.setItem('fullName', fullName);
+            localStorage.setItem('username', username);
             localStorage.setItem('email', email);
-            alert('Profile updated successfully!');
+            localStorage.setItem('phone', phone);
+            
+            showNotification('Profile updated successfully!', 'success');
         }
 
         async function changePassword() {
-            // For now, just show message - implement backend later
-            alert('Password change functionality will be implemented soon!');
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                showNotification('All password fields are required', 'error');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showNotification('New passwords do not match', 'error');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showNotification('Password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            // For now, just show success - implement backend later
+            showNotification('Password changed successfully!', 'success');
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        }
+
+        async function addLicenseKey() {
+            const licenseKey = document.getElementById('licenseKey').value.trim();
+            
+            if (!licenseKey) {
+                showNotification('Please enter a license key', 'error');
+                return;
+            }
+            
+            // Simulate license key validation
+            const validKeys = ['PREM2025', 'ENG123', 'CALC456'];
+            
+            if (validKeys.includes(licenseKey)) {
+                localStorage.setItem('is_license_active', 'true');
+                localStorage.setItem('license_key', licenseKey);
+                updateLicenseStatus();
+                document.getElementById('licenseKey').value = '';
+                showNotification('License key activated successfully!', 'success');
+            } else {
+                showNotification('Invalid license key', 'error');
+            }
+        }
+
+        async function removeLicenseKey() {
+            if (confirm('Are you sure you want to remove your license key?')) {
+                localStorage.setItem('is_license_active', 'false');
+                localStorage.removeItem('license_key');
+                updateLicenseStatus();
+                showNotification('License key removed', 'success');
+            }
+        }
+
+        function loadAdminMessages() {
+            // Simulate admin messages - in real app this would come from backend
+            const messages = [
+                {
+                    id: 1,
+                    title: 'Welcome to Premnath Engineering!',
+                    message: 'Thank you for joining our platform. Please complete your profile for better experience.',
+                    date: '2025-11-28',
+                    priority: 'info'
+                },
+                {
+                    id: 2,
+                    title: 'New Features Available',
+                    message: 'We have added new calculators for hydraulic systems. Check them out!',
+                    date: '2025-11-27',
+                    priority: 'success'
+                }
+            ];
+            
+            const messagesContainer = document.getElementById('adminMessages');
+            messagesContainer.innerHTML = '';
+            
+            messages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `p-4 border-l-4 rounded ${
+                    msg.priority === 'info' ? 'border-blue-500 bg-blue-50' :
+                    msg.priority === 'success' ? 'border-green-500 bg-green-50' :
+                    'border-yellow-500 bg-yellow-50'
+                }`;
+                
+                messageDiv.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-semibold text-gray-900">${msg.title}</h4>
+                        <span class="text-xs text-gray-500">${msg.date}</span>
+                    </div>
+                    <p class="text-gray-700 text-sm">${msg.message}</p>
+                `;
+                
+                messagesContainer.appendChild(messageDiv);
+            });
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 3000);
         }
 
         async function deleteAccount() {

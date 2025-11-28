@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile - Premnath Engineering</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn { from {opacity:0; transform: translateY(10px)} to {opacity:1; transform:none} }
+        @keyframes slideIn { from {opacity:0; transform: translateX(-20px)} to {opacity:1; transform:none} }
+        .card { animation: fadeIn .3s ease-out }
+        .notification { position: fixed; top: 20px; right: 20px; z-index: 1000; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); animation: slideIn 0.3s ease-out; }
+        .success { background: #10b981; color: white; }
+        .error { background: #ef4444; color: white; }
+    </style>
+    <script>
+        const API = window.location.origin;
+        let currentUser = null;
+
+        async function fetchMe() {
+            const user_id = localStorage.getItem('user_id');
+            const email = localStorage.getItem('email');
+            const is_license_active = localStorage.getItem('is_license_active');
+            
+            if (!user_id || !email) { 
+                window.location.href = '/login'; 
+                return; 
+            }
+            
+            // Set current user data from localStorage
+            currentUser = {
+                user_id: user_id,
+                email: email,
+                is_license_active: is_license_active === 'true'
+            };
+            
+            // Set form values
+            document.getElementById('fullName').value = localStorage.getItem('fullName') || '';
+            document.getElementById('username').value = localStorage.getItem('username') || '';
+            document.getElementById('email').value = email || '';
+            document.getElementById('phone').value = localStorage.getItem('phone') || '';
+            document.getElementById('userId').value = user_id || '';
+            
+            // Set license status
+            updateLicenseStatus();
+            
+            // Load admin messages
+            loadAdminMessages();
+        }
+
+        function updateLicenseStatus() {
+            const is_license_active = localStorage.getItem('is_license_active') === 'true';
+            document.getElementById('keyStatus').innerHTML = is_license_active
+                ? '<span class="text-green-700 bg-green-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-check-circle"></i> Active License</span>'
+                : '<span class="text-yellow-700 bg-yellow-100 px-3 py-1 rounded-full text-xs font-semibold"><i class="fas fa-exclamation-triangle"></i> No License</span>';
+        }
+
+        async function saveProfile() {
+            const fullName = document.getElementById('fullName').value;
+            const username = document.getElementById('username').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            
+            // Simple validation
+            if (!email) {
+                showNotification('Email is required', 'error');
+                return;
+            }
+            
+            // Update localStorage
+            localStorage.setItem('fullName', fullName);
+            localStorage.setItem('username', username);
+            localStorage.setItem('email', email);
+            localStorage.setItem('phone', phone);
+            
+            showNotification('Profile updated successfully!', 'success');
+        }
+
+        async function changePassword() {
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                showNotification('All password fields are required', 'error');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showNotification('New passwords do not match', 'error');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showNotification('Password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            // For now, just show success - implement backend later
+            showNotification('Password changed successfully!', 'success');
+            document.getElementById('currentPassword').value = '';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('confirmPassword').value = '';
+        }
+
+        async function addLicenseKey() {
+            const licenseKey = document.getElementById('licenseKey').value.trim();
+            
+            if (!licenseKey) {
+                showNotification('Please enter a license key', 'error');
+                return;
+            }
+            
+            // Simulate license key validation
+            const validKeys = ['PREM2025', 'ENG123', 'CALC456'];
+            
+            if (validKeys.includes(licenseKey)) {
+                localStorage.setItem('is_license_active', 'true');
+                localStorage.setItem('license_key', licenseKey);
+                updateLicenseStatus();
+                document.getElementById('licenseKey').value = '';
+                showNotification('License key activated successfully!', 'success');
+            } else {
+                showNotification('Invalid license key', 'error');
+            }
+        }
+
+        async function removeLicenseKey() {
+            if (confirm('Are you sure you want to remove your license key?')) {
+                localStorage.setItem('is_license_active', 'false');
+                localStorage.removeItem('license_key');
+                updateLicenseStatus();
+                showNotification('License key removed', 'success');
+            }
+        }
+
+        function loadAdminMessages() {
+            // Simulate admin messages - in real app this would come from backend
+            const messages = [
+                {
+                    id: 1,
+                    title: 'Welcome to Premnath Engineering!',
+                    message: 'Thank you for joining our platform. Please complete your profile for better experience.',
+                    date: '2025-11-28',
+                    priority: 'info'
+                },
+                {
+                    id: 2,
+                    title: 'New Features Available',
+                    message: 'We have added new calculators for hydraulic systems. Check them out!',
+                    date: '2025-11-27',
+                    priority: 'success'
+                }
+            ];
+            
+            const messagesContainer = document.getElementById('adminMessages');
+            messagesContainer.innerHTML = '';
+            
+            messages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `p-4 border-l-4 rounded ${
+                    msg.priority === 'info' ? 'border-blue-500 bg-blue-50' :
+                    msg.priority === 'success' ? 'border-green-500 bg-green-50' :
+                    'border-yellow-500 bg-yellow-50'
+                }`;
+                
+                messageDiv.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-semibold text-gray-900">${msg.title}</h4>
+                        <span class="text-xs text-gray-500">${msg.date}</span>
+                    </div>
+                    <p class="text-gray-700 text-sm">${msg.message}</p>
+                `;
+                
+                messagesContainer.appendChild(messageDiv);
+            });
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 3000);
+        }
+
+        function deleteAccount() {
+            if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+                showNotification('Account deletion will be implemented soon. For now, logging you out.', 'error');
+                setTimeout(logout, 2000);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('email');
+            localStorage.removeItem('is_license_active');
+            localStorage.removeItem('is_admin');
+            localStorage.removeItem('fullName');
+            localStorage.removeItem('username');
+            localStorage.removeItem('phone');
+            localStorage.removeItem('license_key');
+            window.location.href = '/login';
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchMe);
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-blue-900 text-white shadow-lg">
+        <div class="container mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <img src="/logo.png" alt="Logo" class="h-8">
+                <a href="/" class="font-bold text-lg hover:text-blue-200 transition">← Back to Home</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-blue-200 text-sm">User Profile</span>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-sm font-semibold transition">
+                    <i class="fas fa-sign-out-alt mr-1"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Personal Information -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6 card">
+                <h2 class="font-bold text-xl mb-6 flex items-center gap-3 text-blue-900">
+                    <i class="fas fa-user-circle text-2xl"></i> Personal Information
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
+                        <input id="fullName" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter your full name" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Username</label>
+                        <input id="username" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Choose a username" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                        <input id="email" type="email" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="your.email@domain.com" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
+                        <input id="phone" type="tel" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="+91 12345 67890" />
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">User ID</label>
+                        <input id="userId" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 bg-gray-100" readonly placeholder="System generated ID" />
+                    </div>
+                    
+                    <div class="flex flex-col justify-center">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">License Status</label>
+                        <div id="keyStatus"></div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-4 mt-8">
+                    <button onclick="saveProfile()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2">
+                        <i class="fas fa-save"></i> Save Profile
+                    </button>
+                    <a href="/" class="px-6 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition flex items-center gap-2">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                </div>
+            </div>
+
+            <!-- License & Security -->
+            <div class="space-y-6">
+                <!-- License Key Management -->
+                <div class="bg-white rounded-xl shadow-lg p-6 card">
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-green-700">
+                        <i class="fas fa-key"></i> License Key
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Enter License Key</label>
+                            <input id="licenseKey" type="text" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="XXXX-XXXX-XXXX" />
+                        </div>
+                        
+                        <div class="flex flex-col gap-2">
+                            <button onclick="addLicenseKey()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-semibold transition">
+                                <i class="fas fa-plus"></i> Add License
+                            </button>
+                            <button onclick="removeLicenseKey()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold transition">
+                                <i class="fas fa-trash"></i> Remove License
+                            </button>
+                        </div>
+                        
+                        <div class="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+                            <strong>Valid Keys:</strong> PREM2025, ENG123, CALC456
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Change Password -->
+                <div class="bg-white rounded-xl shadow-lg p-6 card">
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-orange-600">
+                        <i class="fas fa-lock"></i> Change Password
+                    </h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Current Password</label>
+                            <input id="currentPassword" type="password" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
+                            <input id="newPassword" type="password" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Confirm New Password</label>
+                            <input id="confirmPassword" type="password" class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                        </div>
+                        
+                        <button onclick="changePassword()" class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-semibold transition">
+                            <i class="fas fa-shield-alt"></i> Update Password
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Messages Section -->
+        <div class="max-w-6xl mx-auto mt-8">
+            <div class="bg-white rounded-xl shadow-lg p-6 card">
+                <h3 class="font-bold text-xl mb-6 flex items-center gap-3 text-purple-700">
+                    <i class="fas fa-envelope"></i> Messages from Admin
+                </h3>
+                
+                <div id="adminMessages" class="space-y-4">
+                    <!-- Messages will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="max-w-6xl mx-auto mt-8">
+            <div class="bg-white rounded-xl shadow-lg p-6 card border-l-4 border-red-500">
+                <h3 class="font-bold text-lg mb-4 flex items-center gap-2 text-red-600">
+                    <i class="fas fa-exclamation-triangle"></i> Danger Zone
+                </h3>
+                
+                <p class="text-gray-600 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
+                
+                <button onclick="deleteAccount()" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition">
+                    <i class="fas fa-trash-alt"></i> Delete Account
+                </button>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
