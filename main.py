@@ -368,16 +368,17 @@ async def serve_home(): return FileResponse('index.html')
 @app.get("/login")
 async def serve_login():
     if os.path.exists("login.html"): return FileResponse('login.html')
-    return HTTPException(status_code=404, detail="login.html not found")
+    raise HTTPException(status_code=404, detail="login.html not found")
 
 @app.get("/signup")
 async def serve_signup():
     if os.path.exists("signup.html"): return FileResponse('signup.html')
-    return HTTPException(status_code=404, detail="signup.html not found")
+    raise HTTPException(status_code=404, detail="signup.html not found")
 
 @app.get("/profile")
 async def serve_profile():
     if os.path.exists("profile.html"): return FileResponse('profile.html')
+    raise HTTPException(status_code=404, detail="profile.html not found")
     return HTTPException(status_code=404, detail="profile.html not found")
 
 @app.get("/calculator")
